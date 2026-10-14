@@ -17,6 +17,7 @@ class PerformanceMetrics:
     sharpe_ratio: float | None = None
     sortino_ratio: float | None = None
     cagr: float | None = None
+    calmar_ratio: float | None = None
 
 
 def calculate_trade_pnl(trades: Sequence[Trade]) -> list[float]:
@@ -137,6 +138,18 @@ def calculate_cagr(
     return (final_equity / initial_cash) ** (1.0 / years) - 1.0
 
 
+def calculate_calmar_ratio(
+    cagr: float | None,
+    max_drawdown: float,
+) -> float | None:
+    """Calculate the Calmar ratio (CAGR / Max Drawdown)."""
+    if cagr is None:
+        return None
+    if max_drawdown <= 0.0:
+        return float("inf") if cagr > 0.0 else 0.0
+    return cagr / max_drawdown
+
+
 def calculate_metrics(
     initial_cash: float,
     equity_curve: Sequence[float],
@@ -205,6 +218,10 @@ def calculate_metrics(
         periods=len(equity_curve),
         periods_per_year=periods_per_year,
     )
+    calmar = calculate_calmar_ratio(
+        cagr=cagr,
+        max_drawdown=max_drawdown,
+    )
 
     return PerformanceMetrics(
         total_pnl=total_pnl,
@@ -216,4 +233,5 @@ def calculate_metrics(
         sharpe_ratio=sharpe,
         sortino_ratio=sortino,
         cagr=cagr,
+        calmar_ratio=calmar,
     )

@@ -43,6 +43,7 @@ export interface MetricsDTO {
   sharpe_ratio: number | null;
   sortino_ratio: number | null;
   cagr: number | null;
+  calmar_ratio?: number | null;
 }
 
 export interface BacktestRequest {
@@ -193,6 +194,7 @@ export interface SaveExperimentRequest {
   sharpe_ratio: number | null;
   sortino_ratio: number | null;
   cagr: number | null;
+  calmar_ratio?: number | null;
   equity_curve: EquityPointDTO[];
   trades: TradeDTO[];
 }
@@ -216,6 +218,7 @@ export interface ExperimentSummaryDTO {
   sharpe_ratio: number | null;
   sortino_ratio: number | null;
   cagr: number | null;
+  calmar_ratio: number | null;
 }
 
 export interface ExperimentDetailDTO extends ExperimentSummaryDTO {
@@ -230,5 +233,48 @@ export interface ExperimentDetailDTO extends ExperimentSummaryDTO {
 export interface ExperimentListResponse {
   experiments: ExperimentSummaryDTO[];
   total: number;
+}
+
+export interface TailRiskDTO {
+  var_95_historical: number | null;
+  var_95_parametric: number | null;
+  var_99_historical: number | null;
+  var_99_parametric: number | null;
+  cvar_95: number | null;
+  cvar_99: number | null;
+  tail_ratio: number | null;
+  skewness: number | null;
+  kurtosis: number | null;
+  annualized_volatility: number | null;
+  calmar_ratio: number | null;
+}
+
+export interface MonthlyReturnRowDTO {
+  year: number;
+  months: Record<string, number | null>;
+  year_total: number;
+}
+
+export interface UnderwaterPointDTO {
+  timestamp: string;
+  drawdown: number;
+}
+
+export interface TearSheetRequest extends BacktestRequest {
+  risk_free_rate?: number;
+}
+
+export interface TearSheetResponse {
+  strategy_name: string;
+  configuration: string;
+  dataset: string;
+  bars_processed: number;
+  initial_cash: number;
+  final_equity: number;
+  total_pnl: number;
+  summary: MetricsDTO;
+  tail_risk: TailRiskDTO;
+  monthly_matrix: MonthlyReturnRowDTO[];
+  underwater_curve: UnderwaterPointDTO[];
 }
 

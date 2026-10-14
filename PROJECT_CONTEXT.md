@@ -626,9 +626,18 @@ The database stores persistent application information. The quantitative engine 
 - React frontend components (`WalkForwardPanel.tsx`, `ParameterHeatmap.tsx`) with pure SVG charts, plateau indicators, point inspector drawer, and tabbed navigation in `App.tsx`. (Completed)
 - Streamlit application parity with "Advanced Quantitative Analytics" tabs in `app.py`. (Completed)
 - Multi-Asset Data Ingestion: Custom CSV file uploading and live Yahoo Finance ticker downloads (`POST /api/v1/datasets/upload`, `POST /api/v1/datasets/fetch`) with automatic header normalization and validation. (Completed)
-- Full automated test suite (128 passing tests in `pytest`, 0 lint warnings in `ruff`, 0 errors in Vite/TypeScript). (Completed)
+- Quantitative Tear-Sheet & Tail-Risk Diagnostics (`src/quantlab/analytics/tear_sheet.py`):
+  - Value-at-Risk (Historical & Parametric Gaussian VaR at 95% and 99% confidence levels). (Completed)
+  - Conditional Value-at-Risk (CVaR / Expected Shortfall) measuring expected loss in extreme tail percentiles. (Completed)
+  - Calmar ratio ($\text{CAGR} / \text{Max Drawdown}$), tail ratio ($P_{95}/|P_5|$), Fisher-Pearson skewness, and excess kurtosis. (Completed)
+  - Calendar Monthly & Annual compound return heatmap matrix calculation. (Completed)
+  - Continuous underwater drawdown curve calculation. (Completed)
+  - FastAPI endpoint `POST /api/v1/analytics/tear-sheet`. (Completed)
+  - React interactive panel (`TearSheetPanel.tsx`) with dynamic monthly heatmap and pure SVG underwater drawdown chart. (Completed)
+  - Streamlit parity with "Quantitative Tear-Sheet & Tail-Risk Diagnostics" tab in `app.py`. (Completed)
+- Full automated test suite (155 passing tests in `pytest`, 0 lint warnings in `ruff`, 0 errors in Vite/TypeScript). (Completed)
 
-**Completion criterion:** The platform supports meaningful, reproducible out-of-sample strategy evaluation, multi-asset data ingestion, and parameter stability analysis. (Satisfied)
+**Completion criterion:** The platform supports meaningful, reproducible out-of-sample strategy evaluation, multi-asset data ingestion, parameter stability analysis, and comprehensive PyFolio-grade risk tear-sheets. (Satisfied)
 
 ### Phase 6 — Deployment and final major-project preparation
 

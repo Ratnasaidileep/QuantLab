@@ -76,6 +76,7 @@ class MetricsDTO(BaseModel):
     sharpe_ratio: float | None = None
     sortino_ratio: float | None = None
     cagr: float | None = None
+    calmar_ratio: float | None = None
 
 
 class BacktestRequest(BaseModel):
@@ -428,6 +429,7 @@ class SaveExperimentRequest(BaseModel):
     sharpe_ratio: float | None = None
     sortino_ratio: float | None = None
     cagr: float | None = None
+    calmar_ratio: float | None = None
     equity_curve: list[EquityPointDTO] = Field(default_factory=list)
     trades: list[TradeDTO] = Field(default_factory=list)
 
@@ -451,6 +453,7 @@ class ExperimentSummaryDTO(BaseModel):
     sharpe_ratio: float | None = None
     sortino_ratio: float | None = None
     cagr: float | None = None
+    calmar_ratio: float | None = None
 
 
 class ExperimentDetailDTO(ExperimentSummaryDTO):
@@ -465,4 +468,47 @@ class ExperimentDetailDTO(ExperimentSummaryDTO):
 class ExperimentListResponse(BaseModel):
     experiments: list[ExperimentSummaryDTO]
     total: int
+
+
+class TailRiskDTO(BaseModel):
+    var_95_historical: float | None
+    var_95_parametric: float | None
+    var_99_historical: float | None
+    var_99_parametric: float | None
+    cvar_95: float | None
+    cvar_99: float | None
+    tail_ratio: float | None
+    skewness: float | None
+    kurtosis: float | None
+    annualized_volatility: float | None
+    calmar_ratio: float | None
+
+
+class MonthlyReturnRowDTO(BaseModel):
+    year: int
+    months: dict[str, float | None]
+    year_total: float
+
+
+class UnderwaterPointDTO(BaseModel):
+    timestamp: str
+    drawdown: float
+
+
+class TearSheetRequest(BacktestRequest):
+    risk_free_rate: float = Field(default=0.05, ge=0.0, le=0.20)
+
+
+class TearSheetResponse(BaseModel):
+    strategy_name: str
+    configuration: str
+    dataset: str
+    bars_processed: int
+    initial_cash: float
+    final_equity: float
+    total_pnl: float
+    summary: MetricsDTO
+    tail_risk: TailRiskDTO
+    monthly_matrix: list[MonthlyReturnRowDTO]
+    underwater_curve: list[UnderwaterPointDTO]
 

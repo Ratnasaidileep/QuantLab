@@ -2,20 +2,31 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 
+from quantlab.analytics.tear_sheet import generate_tear_sheet
 from quantlab.analytics.walk_forward import (
     evaluate_parameter_grid_heatmap,
     run_walk_forward_optimization,
 )
 from quantlab.api.schemas import (
     MetricsDTO,
+    MonthlyReturnRowDTO,
     ParameterGridPointDTO,
     ParameterHeatmapRequest,
     ParameterHeatmapResponse,
+    StrategyType,
+    TailRiskDTO,
+    TearSheetRequest,
+    TearSheetResponse,
+    UnderwaterPointDTO,
     WalkForwardRequest,
     WalkForwardResponse,
     WalkForwardWindowDTO,
 )
+from quantlab.backtest.engine import Backtest
 from quantlab.data.csv_loader import load_bars_from_csv
+from quantlab.strategy.bollinger import BollingerBandsStrategy
+from quantlab.strategy.moving_average import MovingAverageCrossover
+from quantlab.strategy.rsi import RSIStrategy
 
 router = APIRouter(prefix="/analytics", tags=["Advanced Analytics"])
 
@@ -169,4 +180,157 @@ def parameter_heatmap_analysis(request: ParameterHeatmapRequest) -> ParameterHea
         plateau_ratio=result.plateau_ratio,
         stability_verdict=result.stability_verdict,
         grid=grid_dto,
+    )
+
+
+@router.post("/tear-sheet", response_model=TearSheetResponse)
+def generate_tear_sheet_report(request: TearSheetRequest) -> TearSheetResponse:
+    """Generate a comprehensive quantitative tear-sheet with tail-risk metrics and monthly returns."""
+    dataset_name = Path(request.dataset).name
+    file_path = DATA_DIR / dataset_name
+
+    if not file_path.exists() or not file_path.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Dataset '{dataset_name}' not found.",
+        )
+
+    try:
+        bars = load_bars_from_csv(file_path)
+    except Exception as error:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to load dataset: {error}",
+        ) from error
+
+    if not bars:
+        raise HTTPException(
+            status_code=400,
+            detail="The dataset contains no usable market bars.",
+        )
+
+    if request.strategy == StrategyType.MOVING_AVERAGE:
+        strategy = MovingAverageCrossover(
+            fast_period=request.fast_period,
+            slow_period=request.slow_period,
+        )
+        use_crossover = True
+        strategy_name = "Moving Average Crossover"
+        configuration = f"Fast {request.fast_period} / Slow {request.slow_period}"
+    elif request.strategy == StrategyType.RSI:
+        strategy = RSIStrategy(
+            period=request.rsi_period,
+            oversold=request.oversold,
+            overbought=request.overbought,
+        )
+        use_crossover = False
+        strategy_name = "RSI"
+        configuration = (
+            f"Period {request.rsi_period} / "
+            f"Oversold {request.oversold:g} / "
+            f"Overbought {request.overbought:g}"
+        )
+    elif request.strategy == StrategyType.BOLLINGER:
+        strategy = BollingerBandsStrategy(
+            period=request.bb_period,
+            std_dev_multiplier=request.bb_std_dev,
+        )
+        use_crossover = False
+        strategy_name = "Bollinger Bands"
+        configuration = (
+            f"Period {request.bb_period} / StdDev {request.bb_std_dev:g}"
+        )
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported strategy '{request.strategy}'.",
+        )
+
+    try:
+        backtest = Backtest(
+            initial_cash=request.initial_cash,
+            strategy=strategy,
+            commission_rate=request.commission_rate,
+            slippage_rate=request.slippage_rate,
+            use_crossover=use_crossover,
+            sizing_mode=request.sizing_mode.value,
+            quantity_per_trade=request.quantity_per_trade,
+        )
+        result = backtest.run(bars)
+    except Exception as error:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Backtest simulation failed: {error}",
+        ) from error
+
+    try:
+        sheet = generate_tear_sheet(
+            bars=bars,
+            equity_curve=result.equity_curve,
+            trades=result.trades,
+            initial_cash=request.initial_cash,
+            risk_free_rate=request.risk_free_rate,
+        )
+    except Exception as error:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Tear-sheet calculation failed: {error}",
+        ) from error
+
+    summary_dto = MetricsDTO(
+        total_pnl=sheet.summary.total_pnl,
+        total_return=sheet.summary.total_return,
+        max_drawdown=sheet.summary.max_drawdown,
+        total_trades=sheet.summary.total_trades,
+        win_rate=sheet.summary.win_rate,
+        profit_factor=sheet.summary.profit_factor,
+        sharpe_ratio=sheet.summary.sharpe_ratio,
+        sortino_ratio=sheet.summary.sortino_ratio,
+        cagr=sheet.summary.cagr,
+        calmar_ratio=sheet.summary.calmar_ratio,
+    )
+
+    tail_risk_dto = TailRiskDTO(
+        var_95_historical=sheet.tail_risk.var_95_historical,
+        var_95_parametric=sheet.tail_risk.var_95_parametric,
+        var_99_historical=sheet.tail_risk.var_99_historical,
+        var_99_parametric=sheet.tail_risk.var_99_parametric,
+        cvar_95=sheet.tail_risk.cvar_95,
+        cvar_99=sheet.tail_risk.cvar_99,
+        tail_ratio=sheet.tail_risk.tail_ratio,
+        skewness=sheet.tail_risk.skewness,
+        kurtosis=sheet.tail_risk.kurtosis,
+        annualized_volatility=sheet.tail_risk.annualized_volatility,
+        calmar_ratio=sheet.tail_risk.calmar_ratio,
+    )
+
+    monthly_dto = [
+        MonthlyReturnRowDTO(
+            year=row.year,
+            months=row.months,
+            year_total=row.year_total,
+        )
+        for row in sheet.monthly_matrix
+    ]
+
+    underwater_dto = [
+        UnderwaterPointDTO(
+            timestamp=pt.timestamp.isoformat(),
+            drawdown=pt.drawdown,
+        )
+        for pt in sheet.underwater_curve
+    ]
+
+    return TearSheetResponse(
+        strategy_name=strategy_name,
+        configuration=configuration,
+        dataset=dataset_name,
+        bars_processed=result.bars_processed,
+        initial_cash=request.initial_cash,
+        final_equity=result.final_equity,
+        total_pnl=result.total_pnl,
+        summary=summary_dto,
+        tail_risk=tail_risk_dto,
+        monthly_matrix=monthly_dto,
+        underwater_curve=underwater_dto,
     )

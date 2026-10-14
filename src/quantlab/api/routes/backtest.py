@@ -131,6 +131,7 @@ def run_backtest(request: BacktestRequest) -> BacktestResponse:
             sharpe_ratio=result.metrics.sharpe_ratio,
             sortino_ratio=result.metrics.sortino_ratio,
             cagr=result.metrics.cagr,
+            calmar_ratio=result.metrics.calmar_ratio,
         )
         if result.metrics is not None
         else MetricsDTO(

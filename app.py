@@ -15,6 +15,7 @@ from quantlab.analytics.strategy_comparison import (
     compare_buy_and_hold,
     compare_strategies,
 )
+from quantlab.analytics.tear_sheet import generate_tear_sheet
 from quantlab.analytics.walk_forward import (
     evaluate_parameter_grid_heatmap,
     run_walk_forward_optimization,
@@ -333,7 +334,7 @@ if run_backtest:
         metric_col6.metric("Profit Factor", pf_str)
         metric_col7.metric("Executed Trades", result.metrics.total_trades)
 
-        metric_col8, metric_col9, metric_col10 = st.columns(3)
+        metric_col8, metric_col9, metric_col10, metric_col11 = st.columns(4)
 
         sharpe_str = (
             f"{result.metrics.sharpe_ratio:.2f}"
@@ -360,10 +361,21 @@ if run_backtest:
             if result.metrics.cagr is not None
             else "N/A"
         )
+        calmar_str = (
+            f"{result.metrics.calmar_ratio:.2f}"
+            if result.metrics.calmar_ratio is not None
+            and not math.isinf(result.metrics.calmar_ratio)
+            else (
+                "N/A"
+                if result.metrics.calmar_ratio is None
+                else ("∞" if result.metrics.calmar_ratio > 0 else "0.00")
+            )
+        )
 
-        metric_col8.metric("Sharpe Ratio (Rf=5%)", sharpe_str)
+        metric_col8.metric("Sharpe (Rf=5%)", sharpe_str)
         metric_col9.metric("Sortino Ratio", sortino_str)
         metric_col10.metric("CAGR", cagr_str)
+        metric_col11.metric("Calmar Ratio", calmar_str)
     else:
         metric_col3.metric("Total Return", "N/A")
         metric_col4.metric("Max Drawdown", "N/A")
@@ -764,9 +776,10 @@ else:
 st.divider()
 st.header("Advanced Quantitative Analytics")
 
-analytics_tab_wfo, analytics_tab_heatmap, analytics_tab_history = st.tabs([
+analytics_tab_wfo, analytics_tab_heatmap, analytics_tab_tearsheet, analytics_tab_history = st.tabs([
     "🔄 Walk-Forward Optimization (Out-of-Sample)",
     "🗺️ 2D Parameter Surface & Stability Heatmap",
+    "📑 Quantitative Tear-Sheet & Tail-Risk Diagnostics",
     "📁 Saved Experiments / Run History",
 ])
 
@@ -899,6 +912,137 @@ with analytics_tab_heatmap:
 
             except (ValueError, TypeError, OSError) as error:
                 st.error(f"Parameter Heatmap evaluation failed: {error}")
+
+with analytics_tab_tearsheet:
+    st.subheader("Quantitative Tear-Sheet & Tail-Risk Diagnostics")
+    st.write(
+        "Evaluate Value-at-Risk (VaR 95/99%), Expected Shortfall (CVaR), Calmar ratio, "
+        "calendar monthly/annual returns heatmap, and peak-to-trough underwater drawdown curves."
+    )
+
+    ts_c1, ts_c2, ts_c3 = st.columns([2, 2, 1])
+    ts_strategy = ts_c1.selectbox(
+        "Tear-Sheet Strategy",
+        ["Moving Average Crossover", "RSI", "Bollinger Bands"],
+        key="ts_strat_select",
+    )
+    ts_rf_rate = ts_c3.number_input(
+        "Risk-Free Rate (Annual)",
+        min_value=0.0,
+        max_value=0.20,
+        value=0.05,
+        step=0.01,
+        key="ts_rf_input",
+    )
+
+    if ts_strategy == "Moving Average Crossover":
+        ts_p1, ts_p2 = ts_c2.columns(2)
+        ts_fast = ts_p1.number_input("Fast MA", min_value=1, value=10, step=1, key="ts_fast_ma")
+        ts_slow = ts_p2.number_input("Slow MA", min_value=2, value=30, step=1, key="ts_slow_ma")
+    elif ts_strategy == "RSI":
+        ts_p1, ts_p2, ts_p3 = ts_c2.columns(3)
+        ts_rsi_p = ts_p1.number_input("RSI Period", min_value=2, value=14, step=1, key="ts_rsi_p")
+        ts_os = ts_p2.number_input("Oversold", min_value=1.0, max_value=99.0, value=30.0, step=1.0, key="ts_rsi_os")
+        ts_ob = ts_p3.number_input("Overbought", min_value=1.0, max_value=100.0, value=70.0, step=1.0, key="ts_rsi_ob")
+    else:
+        ts_p1, ts_p2 = ts_c2.columns(2)
+        ts_bb_n = ts_p1.number_input("BB Period (N)", min_value=2, value=20, step=1, key="ts_bb_n")
+        ts_bb_k = ts_p2.number_input("Multiplier (k)", min_value=0.1, value=2.0, step=0.1, key="ts_bb_k")
+
+    if st.button("▶ Generate Quantitative Tear-Sheet", key="btn_run_tearsheet"):
+        with st.spinner("Simulating strategy and computing risk tear-sheet..."):
+            try:
+                bars = load_bars_from_csv(data_path)
+                if ts_strategy == "Moving Average Crossover":
+                    if ts_fast >= ts_slow:
+                        st.error("Fast MA must be smaller than Slow MA.")
+                        st.stop()
+                    strat_obj = MovingAverageCrossover(fast_period=int(ts_fast), slow_period=int(ts_slow))
+                    crossover_flag = True
+                elif ts_strategy == "RSI":
+                    strat_obj = RSIStrategy(period=int(ts_rsi_p), oversold=float(ts_os), overbought=float(ts_ob))
+                    crossover_flag = False
+                else:
+                    strat_obj = BollingerBandsStrategy(period=int(ts_bb_n), std_dev_multiplier=float(ts_bb_k))
+                    crossover_flag = False
+
+                b_engine = Backtest(
+                    initial_cash=initial_cash,
+                    strategy=strat_obj,
+                    commission_rate=commission_rate,
+                    slippage_rate=slippage_rate,
+                    use_crossover=crossover_flag,
+                    sizing_mode=sizing_mode,
+                    quantity_per_trade=float(quantity_per_trade),
+                )
+                bt_res = b_engine.run(bars)
+
+                sheet_data = generate_tear_sheet(
+                    bars=bars,
+                    equity_curve=bt_res.equity_curve,
+                    trades=bt_res.trades,
+                    initial_cash=initial_cash,
+                    risk_free_rate=float(ts_rf_rate),
+                )
+
+                st.subheader("Executive Performance Scorecard")
+                sc1, sc2, sc3, sc4 = st.columns(4)
+                sc1.metric("Total Return", f"{sheet_data.summary.total_return:.2%}")
+                sc2.metric("CAGR", f"{sheet_data.summary.cagr:.2%}" if sheet_data.summary.cagr is not None else "N/A")
+                sc3.metric("Max Drawdown", f"{sheet_data.summary.max_drawdown:.2%}")
+                calmar_v = f"{sheet_data.summary.calmar_ratio:.2f}" if sheet_data.summary.calmar_ratio is not None and not math.isinf(sheet_data.summary.calmar_ratio) else "N/A"
+                sc4.metric("Calmar Ratio", calmar_v)
+
+                sc5, sc6, sc7, sc8 = st.columns(4)
+                sharpe_v = f"{sheet_data.summary.sharpe_ratio:.2f}" if sheet_data.summary.sharpe_ratio is not None and not math.isinf(sheet_data.summary.sharpe_ratio) else "N/A"
+                sortino_v = f"{sheet_data.summary.sortino_ratio:.2f}" if sheet_data.summary.sortino_ratio is not None and not math.isinf(sheet_data.summary.sortino_ratio) else "N/A"
+                win_v = f"{sheet_data.summary.win_rate:.1%}" if sheet_data.summary.win_rate is not None else "N/A"
+                pf_v = f"{sheet_data.summary.profit_factor:.2f}" if sheet_data.summary.profit_factor is not None and not math.isinf(sheet_data.summary.profit_factor) else "N/A"
+                sc5.metric("Sharpe Ratio", sharpe_v)
+                sc6.metric("Sortino Ratio", sortino_v)
+                sc7.metric("Win Rate", win_v)
+                sc8.metric("Profit Factor", pf_v)
+
+                st.subheader("Tail-Risk & Extreme Loss Diagnostics")
+                r1, r2, r3, r4 = st.columns(4)
+                var95_h = f"{sheet_data.tail_risk.var_95_historical:.2%}" if sheet_data.tail_risk.var_95_historical is not None else "N/A"
+                var95_p = f"{sheet_data.tail_risk.var_95_parametric:.2%}" if sheet_data.tail_risk.var_95_parametric is not None else "N/A"
+                cvar95 = f"{sheet_data.tail_risk.cvar_95:.2%}" if sheet_data.tail_risk.cvar_95 is not None else "N/A"
+                var99_h = f"{sheet_data.tail_risk.var_99_historical:.2%}" if sheet_data.tail_risk.var_99_historical is not None else "N/A"
+                r1.metric("Historical VaR (95%)", var95_h, help="Daily loss exceeded only 5% of trading sessions.")
+                r2.metric("Parametric VaR (95%)", var95_p, help="Gaussian model -(μ - 1.645σ).")
+                r3.metric("Expected Shortfall (CVaR 95%)", cvar95, help="Average loss strictly during worst 5% tail sessions.")
+                r4.metric("Historical VaR (99%)", var99_h, help="1-in-100 day extreme tail loss.")
+
+                r5, r6, r7, r8 = st.columns(4)
+                cvar99 = f"{sheet_data.tail_risk.cvar_99:.2%}" if sheet_data.tail_risk.cvar_99 is not None else "N/A"
+                vol_v = f"{sheet_data.tail_risk.annualized_volatility:.2%}" if sheet_data.tail_risk.annualized_volatility is not None else "N/A"
+                tr_v = f"{sheet_data.tail_risk.tail_ratio:.2f}" if sheet_data.tail_risk.tail_ratio is not None else "N/A"
+                skew_v = f"{sheet_data.tail_risk.skewness:.2f}" if sheet_data.tail_risk.skewness is not None else "N/A"
+                r5.metric("Expected Shortfall (CVaR 99%)", cvar99, help="Average loss in worst 1% catastrophic market events.")
+                r6.metric("Annualized Volatility", vol_v, help="Daily standard deviation annualized (√252).")
+                r7.metric("Tail Ratio (P95/|P5|)", tr_v, help="Values > 1.0 indicate positive upside tail skew.")
+                r8.metric("Return Skewness", skew_v, help="Third standardized moment asymmetry.")
+
+                st.subheader("Calendar Monthly & Annual Return Heatmap")
+                matrix_rows = []
+                for m_row in sheet_data.monthly_matrix:
+                    row_dict = {"Year": str(m_row.year)}
+                    for m_name, val in m_row.months.items():
+                        row_dict[m_name] = f"{val:.1%}" if val is not None else "—"
+                    row_dict["Year Total"] = f"{m_row.year_total:.2%}"
+                    matrix_rows.append(row_dict)
+                st.dataframe(matrix_rows, use_container_width=True, hide_index=True)
+
+                st.subheader("Underwater Portfolio Drawdown Curve")
+                underwater_df = pd.DataFrame([
+                    {"Date": pt.timestamp, "Drawdown (%)": pt.drawdown * 100}
+                    for pt in sheet_data.underwater_curve
+                ]).set_index("Date")
+                st.area_chart(underwater_df)
+
+            except (ValueError, TypeError, OSError) as error:
+                st.error(f"Tear-sheet generation failed: {error}")
 
 with analytics_tab_history:
     st.subheader("Persistent Experiment History (SQLite Repository)")

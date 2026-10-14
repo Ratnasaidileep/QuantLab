@@ -21,8 +21,13 @@ Developed as a B.Tech major project, QuantLab focuses on realistic historical si
   - Maximum Peak-to-Trough Drawdown
   - Realized Trade Win Rate (via FIFO round-trip matching)
   - Profit Factor (Gross Profits / Gross Losses)
-  - Annualized Sharpe Ratio ($R_f=5\%$) & Sortino Ratio (downside deviation risk)
-  - Compound Annual Growth Rate (CAGR)
+  - Compound Annual Growth Rate (CAGR) & Calmar Ratio ($\text{CAGR} / \text{Max Drawdown}$)
+- **Comprehensive Tear-Sheet & Tail-Risk Diagnostics**:
+  - **Value-at-Risk (VaR 95% & 99%)**: Historical empirical quantile and Gaussian parametric models.
+  - **Conditional Value-at-Risk (CVaR / Expected Shortfall)**: Average loss in worst 5% and 1% tail regimes.
+  - **Distribution Diagnostics**: Tail ratio ($P_{95}/|P_5|$), Fisher-Pearson skewness, and excess kurtosis.
+  - **Calendar Monthly/Annual Return Heatmap**: Year-over-month performance matrix with annual compounding.
+  - **Underwater Drawdown Curve**: Continuous peak-to-trough drawdown depth tracking.
 - **Flexible Capital & Position Sizing**:
   - Unit Trade (`unit` — 1 share, baseline)
   - Full Capital Allocation (`all_in` — maximal capital deployment, eliminates cash drag)
@@ -70,6 +75,7 @@ QuantLab/
 │       │   ├── metrics.py
 │       │   ├── plotting.py
 │       │   ├── strategy_comparison.py
+│       │   ├── tear_sheet.py
 │       │   └── walk_forward.py
 │       └── api/                         # FastAPI REST API layer
 │           ├── main.py
@@ -170,7 +176,7 @@ The application will start at `http://localhost:8501`. From the dashboard, you c
 QuantLab enforces strict test-driven development and style standards:
 
 ```bash
-# Run backend pytest suite (144 verified passing tests)
+# Run backend pytest suite (155 verified passing tests)
 python -m pytest -v
 
 # Run Python linter
@@ -216,5 +222,5 @@ Baseline performance with ₹100,000 initial capital, 0.1% commission, and 0.1% 
 - [x] **Phase 2 — FastAPI Backend**: REST API wrapping the quantitative engine with Pydantic validation, CORS, Swagger documentation, and automated endpoint tests (99 -> 111 tests).
 - [x] **Phase 3 — React Frontend**: Modern full-stack dashboard with real-time API health monitoring, interactive parameter controls, SVG equity curves, trade logs, and comparative benchmark leaderboards.
 - [x] **Phase 4 — Persistence & Saved Experiment History**: Zero-dependency SQLite repository with relational indexing, JSON serialization for equity curves and trade traces, FastAPI CRUD endpoints, React history browser with reload capability, and Streamlit inspector parity (139 -> 144 tests).
-- [x] **Phase 5 — Advanced Quantitative Analytics**: Out-of-sample train/test splits, Walk-Forward Optimization (WFO) with Pardo efficiency grading, stitched OOS equity curves, and 2D parameter plateau stability heatmaps (111 -> 122 tests).
+- [x] **Phase 5 — Advanced Quantitative Analytics & Tear-Sheet**: Walk-Forward Optimization (WFO) with Pardo efficiency grading, 2D parameter plateau stability heatmaps, Calmar ratio, Value-at-Risk (VaR 95/99%), Expected Shortfall (CVaR), monthly calendar return heatmaps, and underwater drawdown curves (111 -> 155 tests).
 - [ ] **Phase 6 — Deployment & Major Project Review**: Production deployment, Dockerization, and academic demonstration artifacts.

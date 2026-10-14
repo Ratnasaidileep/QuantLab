@@ -460,3 +460,44 @@ def test_experiment_endpoints_lifecycle(client: TestClient):
     missing_resp = client.get(f"/api/v1/experiments/{exp_id}")
     assert missing_resp.status_code == 404
 
+
+def test_tear_sheet_endpoint_success(client: TestClient):
+    payload = {
+        "dataset": "reliance_daily.csv",
+        "strategy": "moving_average",
+        "fast_period": 10,
+        "slow_period": 30,
+        "initial_cash": 100000.0,
+        "risk_free_rate": 0.05,
+    }
+    response = client.post("/api/v1/analytics/tear-sheet", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["strategy_name"] == "Moving Average Crossover"
+    assert data["bars_processed"] == 441
+    assert data["summary"]["total_pnl"] is not None
+    assert "calmar_ratio" in data["summary"]
+
+    tail = data["tail_risk"]
+    assert tail["var_95_historical"] is not None
+    assert tail["var_95_parametric"] is not None
+    assert tail["var_99_historical"] is not None
+    assert tail["cvar_95"] is not None
+    assert tail["annualized_volatility"] is not None
+    assert tail["skewness"] is not None
+    assert tail["kurtosis"] is not None
+
+    assert len(data["monthly_matrix"]) >= 1
+    assert len(data["underwater_curve"]) == 441
+
+
+def test_tear_sheet_endpoint_nonexistent_dataset(client: TestClient):
+    payload = {
+        "dataset": "missing_data.csv",
+        "strategy": "moving_average",
+    }
+    response = client.post("/api/v1/analytics/tear-sheet", json=payload)
+    assert response.status_code == 404
+
+

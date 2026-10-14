@@ -14,6 +14,7 @@ import { MetricCards } from './components/MetricCards';
 import { Navbar } from './components/Navbar';
 import { ParameterHeatmap } from './components/ParameterHeatmap';
 import { ResearchNotice } from './components/ResearchNotice';
+import { TearSheetPanel } from './components/TearSheetPanel';
 import { TradeHistoryTable } from './components/TradeHistoryTable';
 import { WalkForwardPanel } from './components/WalkForwardPanel';
 import type {
@@ -25,7 +26,7 @@ import type {
 } from './types';
 import './App.css';
 
-type ActiveTab = 'backtest' | 'walk-forward' | 'parameter-heatmap' | 'experiment-history';
+type ActiveTab = 'backtest' | 'tear-sheet' | 'walk-forward' | 'parameter-heatmap' | 'experiment-history';
 
 export function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('backtest');
@@ -166,6 +167,7 @@ export function App() {
         sharpe_ratio: backtestResult.metrics.sharpe_ratio,
         sortino_ratio: backtestResult.metrics.sortino_ratio,
         cagr: backtestResult.metrics.cagr,
+        calmar_ratio: backtestResult.metrics.calmar_ratio ?? null,
         equity_curve: backtestResult.equity_curve,
         trades: backtestResult.trades,
       });
@@ -202,6 +204,7 @@ export function App() {
         sharpe_ratio: exp.sharpe_ratio,
         sortino_ratio: exp.sortino_ratio,
         cagr: exp.cagr,
+        calmar_ratio: exp.calmar_ratio ?? null,
       },
       trades: exp.trades,
       equity_curve: exp.equity_curve,
@@ -240,6 +243,13 @@ export function App() {
               onClick={() => setActiveTab('backtest')}
             >
               📊 Backtest & Benchmarks
+            </button>
+            <button
+              type="button"
+              className={`tab-btn ${activeTab === 'tear-sheet' ? 'active' : ''}`}
+              onClick={() => setActiveTab('tear-sheet')}
+            >
+              📑 Risk Tear-Sheet
             </button>
             <button
               type="button"
@@ -381,6 +391,17 @@ export function App() {
                 isLoading={isComparing}
               />
             </>
+          )}
+
+          {activeTab === 'tear-sheet' && (
+            <TearSheetPanel
+              dataset={config.dataset}
+              initialCash={config.initial_cash}
+              commissionRate={config.commission_rate}
+              slippageRate={config.slippage_rate}
+              sizingMode={config.sizing_mode}
+              quantityPerTrade={config.quantity_per_trade}
+            />
           )}
 
           {activeTab === 'walk-forward' && (
