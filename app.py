@@ -3,7 +3,9 @@
 import io
 import math
 import re
+import sqlite3
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 import streamlit as st
@@ -22,6 +24,12 @@ from quantlab.data.csv_loader import (
     fetch_ohlcv_from_yfinance,
     load_bars_from_csv,
     save_bars_to_csv,
+)
+from quantlab.storage.repository import (
+    delete_experiment,
+    get_experiment,
+    list_experiments,
+    save_experiment,
 )
 from quantlab.strategy.bollinger import BollingerBandsStrategy
 from quantlab.strategy.moving_average import MovingAverageCrossover
@@ -378,6 +386,96 @@ if run_backtest:
         st.info("The strategy finished approximately at breakeven.")
 
     # -----------------------------------------------------
+    # Save Experiment to Database
+    # -----------------------------------------------------
+
+    with st.expander("💾 Save Experiment Run to History", expanded=False):
+        save_col1, save_col2 = st.columns([3, 1])
+        default_exp_name = f"{selected_strategy} on {selected_dataset}"
+        exp_name_input = save_col1.text_input(
+            "Experiment Run Name",
+            value=default_exp_name,
+            key="exp_save_name",
+        )
+        exp_notes_input = st.text_area(
+            "Research Notes / Hypotheses",
+            placeholder="e.g. Evaluated MA fast=10, slow=30 with 0.1% slippage during trend regime",
+            key="exp_save_notes",
+        )
+        if save_col2.button("💾 Save Run", key="exp_save_btn", use_container_width=True):
+            strat_key = "moving_average"
+            params_dict: dict[str, Any] = {}
+            if selected_strategy == "Moving Average Crossover":
+                strat_key = "moving_average"
+                params_dict = {
+                    "fast_period": int(fast_period),
+                    "slow_period": int(slow_period),
+                }
+            elif selected_strategy == "RSI":
+                strat_key = "rsi"
+                params_dict = {
+                    "period": int(rsi_period),
+                    "oversold": float(rsi_oversold),
+                    "overbought": float(rsi_overbought),
+                }
+            else:
+                strat_key = "bollinger"
+                params_dict = {
+                    "period": int(bb_period),
+                    "std_dev_multiplier": float(bb_std_dev),
+                }
+
+            eq_list = [
+                {
+                    "timestamp": p.timestamp.isoformat()
+                    if hasattr(p.timestamp, "isoformat")
+                    else str(p.timestamp),
+                    "equity": p.equity,
+                    "cash": p.cash,
+                    "position": p.position,
+                }
+                for p in result.equity_curve
+            ]
+            tr_list = [
+                {
+                    "timestamp": t.timestamp.isoformat()
+                    if hasattr(t.timestamp, "isoformat")
+                    else str(t.timestamp),
+                    "side": t.side.value if hasattr(t.side, "value") else str(t.side),
+                    "price": t.price,
+                    "quantity": t.quantity,
+                    "commission": t.commission,
+                }
+                for t in result.trades
+            ]
+
+            saved_rec = save_experiment(
+                name=exp_name_input.strip() or default_exp_name,
+                dataset=selected_dataset,
+                strategy=strat_key,
+                parameters=params_dict,
+                initial_cash=initial_cash,
+                commission_rate=commission_rate,
+                slippage_rate=slippage_rate,
+                sizing_mode=sizing_mode,
+                quantity_per_trade=float(quantity_per_trade),
+                final_equity=result.final_equity,
+                total_pnl=result.total_pnl,
+                total_return=result.metrics.total_return if result.metrics else 0.0,
+                max_drawdown=result.metrics.max_drawdown if result.metrics else 0.0,
+                total_trades=result.metrics.total_trades if result.metrics else len(result.trades),
+                win_rate=result.metrics.win_rate if result.metrics else None,
+                profit_factor=result.metrics.profit_factor if result.metrics else None,
+                sharpe_ratio=result.metrics.sharpe_ratio if result.metrics else None,
+                sortino_ratio=result.metrics.sortino_ratio if result.metrics else None,
+                cagr=result.metrics.cagr if result.metrics else None,
+                equity_curve=eq_list,
+                trades=tr_list,
+                notes=exp_notes_input,
+            )
+            st.success(f"Successfully saved Experiment #{saved_rec.id}: **{saved_rec.name}**")
+
+    # -----------------------------------------------------
     # Strategy Configuration
     # -----------------------------------------------------
 
@@ -666,9 +764,10 @@ else:
 st.divider()
 st.header("Advanced Quantitative Analytics")
 
-analytics_tab_wfo, analytics_tab_heatmap = st.tabs([
+analytics_tab_wfo, analytics_tab_heatmap, analytics_tab_history = st.tabs([
     "🔄 Walk-Forward Optimization (Out-of-Sample)",
     "🗺️ 2D Parameter Surface & Stability Heatmap",
+    "📁 Saved Experiments / Run History",
 ])
 
 with analytics_tab_wfo:
@@ -800,3 +899,122 @@ with analytics_tab_heatmap:
 
             except (ValueError, TypeError, OSError) as error:
                 st.error(f"Parameter Heatmap evaluation failed: {error}")
+
+with analytics_tab_history:
+    st.subheader("Persistent Experiment History (SQLite Repository)")
+    st.write(
+        "Browse, inspect, and manage saved backtest simulations across datasets and strategies "
+        "to track hypothesis progression and maintain reproducible quantitative research."
+    )
+
+    filter_c1, filter_c2, filter_c3 = st.columns([2, 2, 1])
+    hist_datasets = ["All"] + available_datasets
+    selected_hist_dataset = filter_c1.selectbox(
+        "Filter by Dataset",
+        hist_datasets,
+        key="hist_filter_ds",
+    )
+    hist_strategies = ["All", "moving_average", "rsi", "bollinger"]
+    selected_hist_strategy = filter_c2.selectbox(
+        "Filter by Strategy",
+        hist_strategies,
+        key="hist_filter_strat",
+    )
+
+    ds_arg = None if selected_hist_dataset == "All" else selected_hist_dataset
+    strat_arg = None if selected_hist_strategy == "All" else selected_hist_strategy
+
+    try:
+        experiments = list_experiments(dataset=ds_arg, strategy=strat_arg)
+        filter_c3.metric("Saved Runs", len(experiments))
+
+        if not experiments:
+            st.info(
+                "No saved experiments match the filter criteria. "
+                "Run a backtest above and expand 'Save Experiment Run' to persist your results."
+            )
+        else:
+            table_summary = [
+                {
+                    "ID": exp.id,
+                    "Name": exp.name,
+                    "Created At": exp.created_at[:19].replace("T", " "),
+                    "Dataset": exp.dataset,
+                    "Strategy": exp.strategy,
+                    "Return": f"{exp.total_return:.2%}",
+                    "Max Drawdown": f"{exp.max_drawdown:.2%}",
+                    "Sharpe": (
+                        f"{exp.sharpe_ratio:.2f}"
+                        if exp.sharpe_ratio is not None
+                        else "N/A"
+                    ),
+                    "Trades": exp.total_trades,
+                    "Win Rate": (
+                        f"{exp.win_rate:.1%}"
+                        if exp.win_rate is not None
+                        else "N/A"
+                    ),
+                    "Notes": exp.notes if exp.notes else "—",
+                }
+                for exp in experiments
+            ]
+            st.dataframe(table_summary, use_container_width=True, hide_index=True)
+
+            st.divider()
+            st.subheader("Inspect Saved Experiment Details")
+            exp_options = {
+                f"#{e.id}: {e.name} ({e.strategy} on {e.dataset})": e.id
+                for e in experiments
+            }
+            chosen_label = st.selectbox(
+                "Select Experiment to Inspect",
+                list(exp_options.keys()),
+                key="sel_inspect_exp",
+            )
+            chosen_id = exp_options[chosen_label]
+
+            exp_detail = get_experiment(chosen_id)
+            if exp_detail is not None:
+                det_m1, det_m2, det_m3, det_m4 = st.columns(4)
+                det_m1.metric("Final Equity", f"₹{exp_detail.final_equity:,.2f}")
+                det_m2.metric("Total P&L", f"₹{exp_detail.total_pnl:,.2f}")
+                det_m3.metric("Total Return", f"{exp_detail.total_return:.2%}")
+                det_m4.metric("Max Drawdown", f"{exp_detail.max_drawdown:.2%}")
+
+                st.caption(
+                    f"**Parameters:** `{exp_detail.parameters}` | "
+                    f"**Sizing:** {exp_detail.sizing_mode} ({exp_detail.quantity_per_trade}) | "
+                    f"**Commission:** {exp_detail.commission_rate:.2%} | "
+                    f"**Slippage:** {exp_detail.slippage_rate:.2%}"
+                )
+                if exp_detail.notes:
+                    st.info(f"**Research Notes:** {exp_detail.notes}")
+
+                if exp_detail.equity_curve:
+                    st.subheader("Equity Curve")
+                    eq_df = pd.DataFrame(exp_detail.equity_curve)
+                    if "timestamp" in eq_df.columns and "equity" in eq_df.columns:
+                        eq_df["timestamp"] = pd.to_datetime(eq_df["timestamp"])
+                        eq_df = eq_df.set_index("timestamp")
+                        st.line_chart(eq_df["equity"])
+
+                if exp_detail.trades:
+                    st.subheader(f"Executed Trades ({len(exp_detail.trades)})")
+                    st.dataframe(
+                        exp_detail.trades,
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+
+                del_col1, del_col2 = st.columns([4, 1])
+                if del_col2.button(
+                    f"🗑️ Delete #{exp_detail.id}",
+                    key=f"del_exp_{exp_detail.id}",
+                    type="secondary",
+                ):
+                    delete_experiment(exp_detail.id)
+                    st.warning(f"Deleted Experiment #{exp_detail.id}")
+                    st.rerun()
+
+    except (ValueError, TypeError, OSError, sqlite3.Error) as e:
+        st.error(f"Failed to access experiment repository: {e}")

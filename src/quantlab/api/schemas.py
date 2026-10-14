@@ -406,3 +406,63 @@ class ParameterHeatmapResponse(BaseModel):
     stability_verdict: str
     grid: list[ParameterGridPointDTO]
 
+
+class SaveExperimentRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100, description="Name or title for the experiment.")
+    notes: str = Field(default="", max_length=1000, description="User notes or observations.")
+    dataset: str
+    strategy: str
+    parameters: dict[str, Any] = Field(default_factory=dict)
+    initial_cash: float
+    commission_rate: float = 0.001
+    slippage_rate: float = 0.001
+    sizing_mode: str = "unit"
+    quantity_per_trade: float = 1.0
+    final_equity: float
+    total_pnl: float
+    total_return: float
+    max_drawdown: float
+    total_trades: int
+    win_rate: float | None = None
+    profit_factor: float | None = None
+    sharpe_ratio: float | None = None
+    sortino_ratio: float | None = None
+    cagr: float | None = None
+    equity_curve: list[EquityPointDTO] = Field(default_factory=list)
+    trades: list[TradeDTO] = Field(default_factory=list)
+
+
+class ExperimentSummaryDTO(BaseModel):
+    id: int
+    name: str
+    notes: str
+    created_at: str
+    dataset: str
+    strategy: str
+    parameters: dict[str, Any]
+    initial_cash: float
+    final_equity: float
+    total_pnl: float
+    total_return: float
+    max_drawdown: float
+    total_trades: int
+    win_rate: float | None = None
+    profit_factor: float | None = None
+    sharpe_ratio: float | None = None
+    sortino_ratio: float | None = None
+    cagr: float | None = None
+
+
+class ExperimentDetailDTO(ExperimentSummaryDTO):
+    commission_rate: float
+    slippage_rate: float
+    sizing_mode: str
+    quantity_per_trade: float
+    equity_curve: list[EquityPointDTO] = Field(default_factory=list)
+    trades: list[TradeDTO] = Field(default_factory=list)
+
+
+class ExperimentListResponse(BaseModel):
+    experiments: list[ExperimentSummaryDTO]
+    total: int
+

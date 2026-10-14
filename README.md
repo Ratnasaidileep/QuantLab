@@ -63,6 +63,9 @@ QuantLab/
 │       ├── backtest/                    # Execution engine and trade models
 │       │   ├── models.py
 │       │   └── engine.py
+│       ├── storage/                     # SQLite persistence and experiment repository
+│       │   ├── __init__.py
+│       │   └── repository.py
 │       ├── analytics/                   # Performance metrics, charts, and strategy comparisons
 │       │   ├── metrics.py
 │       │   ├── plotting.py
@@ -167,7 +170,7 @@ The application will start at `http://localhost:8501`. From the dashboard, you c
 QuantLab enforces strict test-driven development and style standards:
 
 ```bash
-# Run backend pytest suite (139 verified passing tests)
+# Run backend pytest suite (144 verified passing tests)
 python -m pytest -v
 
 # Run Python linter
@@ -212,6 +215,6 @@ Baseline performance with ₹100,000 initial capital, 0.1% commission, and 0.1% 
 - [x] **Phase 1 — Engine Hardening**: Flexible position sizing (`unit`, `all_in`, `fixed_quantity`), annualized Sharpe/Sortino ratios, CAGR, and trade-level analytics (79 -> 99 tests).
 - [x] **Phase 2 — FastAPI Backend**: REST API wrapping the quantitative engine with Pydantic validation, CORS, Swagger documentation, and automated endpoint tests (99 -> 111 tests).
 - [x] **Phase 3 — React Frontend**: Modern full-stack dashboard with real-time API health monitoring, interactive parameter controls, SVG equity curves, trade logs, and comparative benchmark leaderboards.
+- [x] **Phase 4 — Persistence & Saved Experiment History**: Zero-dependency SQLite repository with relational indexing, JSON serialization for equity curves and trade traces, FastAPI CRUD endpoints, React history browser with reload capability, and Streamlit inspector parity (139 -> 144 tests).
 - [x] **Phase 5 — Advanced Quantitative Analytics**: Out-of-sample train/test splits, Walk-Forward Optimization (WFO) with Pardo efficiency grading, stitched OOS equity curves, and 2D parameter plateau stability heatmaps (111 -> 122 tests).
-- [ ] **Phase 4 — Persistence & Auth**: PostgreSQL database, user authentication, and saved backtest experiment history.
 - [ ] **Phase 6 — Deployment & Major Project Review**: Production deployment, Dockerization, and academic demonstration artifacts.

@@ -389,3 +389,74 @@ def test_fetch_dataset_error(client: TestClient, monkeypatch):
     assert response.status_code == 400
     assert "could not download" in response.json()["detail"].lower()
 
+
+def test_experiment_endpoints_lifecycle(client: TestClient):
+    payload = {
+        "name": "Reliance Test Run",
+        "notes": "Testing persistence endpoints",
+        "dataset": "reliance_daily.csv",
+        "strategy": "moving_average",
+        "parameters": {"fast_period": 10, "slow_period": 30},
+        "initial_cash": 100000.0,
+        "commission_rate": 0.001,
+        "slippage_rate": 0.001,
+        "sizing_mode": "unit",
+        "quantity_per_trade": 1.0,
+        "final_equity": 102500.0,
+        "total_pnl": 2500.0,
+        "total_return": 0.025,
+        "max_drawdown": 0.015,
+        "total_trades": 12,
+        "win_rate": 0.58,
+        "profit_factor": 1.8,
+        "sharpe_ratio": 1.45,
+        "sortino_ratio": 2.1,
+        "cagr": 0.08,
+        "equity_curve": [
+            {"timestamp": "2025-01-01T00:00:00Z", "equity": 100000.0},
+            {"timestamp": "2025-01-02T00:00:00Z", "equity": 102500.0},
+        ],
+        "trades": [
+            {
+                "timestamp": "2025-01-02T00:00:00Z",
+                "side": "buy",
+                "price": 1000.0,
+                "quantity": 1.0,
+                "commission": 1.0,
+            }
+        ],
+    }
+
+    # 1. Create experiment
+    create_resp = client.post("/api/v1/experiments", json=payload)
+    assert create_resp.status_code == 201
+    created_data = create_resp.json()
+    assert created_data["id"] is not None
+    assert created_data["name"] == "Reliance Test Run"
+    exp_id = created_data["id"]
+
+    # 2. Get experiment detail
+    detail_resp = client.get(f"/api/v1/experiments/{exp_id}")
+    assert detail_resp.status_code == 200
+    detail_data = detail_resp.json()
+    assert detail_data["name"] == "Reliance Test Run"
+    assert len(detail_data["equity_curve"]) == 2
+    assert len(detail_data["trades"]) == 1
+
+    # 3. List experiments
+    list_resp = client.get("/api/v1/experiments?strategy=moving_average")
+    assert list_resp.status_code == 200
+    list_data = list_resp.json()
+    assert list_data["total"] >= 1
+    found = any(exp["id"] == exp_id for exp in list_data["experiments"])
+    assert found is True
+
+    # 4. Delete experiment
+    del_resp = client.delete(f"/api/v1/experiments/{exp_id}")
+    assert del_resp.status_code == 200
+    assert del_resp.json()["id"] == exp_id
+
+    # 5. Verify 404 after deletion
+    missing_resp = client.get(f"/api/v1/experiments/{exp_id}")
+    assert missing_resp.status_code == 404
+

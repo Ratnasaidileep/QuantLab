@@ -171,3 +171,64 @@ export interface ParameterHeatmapResponse {
   stability_verdict: string;
   grid: ParameterGridPointDTO[];
 }
+
+export interface SaveExperimentRequest {
+  name: string;
+  notes?: string;
+  dataset: string;
+  strategy: string;
+  parameters?: Record<string, unknown>;
+  initial_cash: number;
+  commission_rate: number;
+  slippage_rate: number;
+  sizing_mode: string;
+  quantity_per_trade: number;
+  final_equity: number;
+  total_pnl: number;
+  total_return: number;
+  max_drawdown: number;
+  total_trades: number;
+  win_rate: number | null;
+  profit_factor: number | null;
+  sharpe_ratio: number | null;
+  sortino_ratio: number | null;
+  cagr: number | null;
+  equity_curve: EquityPointDTO[];
+  trades: TradeDTO[];
+}
+
+export interface ExperimentSummaryDTO {
+  id: number;
+  name: string;
+  notes: string;
+  created_at: string;
+  dataset: string;
+  strategy: string;
+  parameters: Record<string, unknown>;
+  initial_cash: number;
+  final_equity: number;
+  total_pnl: number;
+  total_return: number;
+  max_drawdown: number;
+  total_trades: number;
+  win_rate: number | null;
+  profit_factor: number | null;
+  sharpe_ratio: number | null;
+  sortino_ratio: number | null;
+  cagr: number | null;
+}
+
+export interface ExperimentDetailDTO extends ExperimentSummaryDTO {
+  commission_rate: number;
+  slippage_rate: number;
+  sizing_mode: string;
+  quantity_per_trade: number;
+  equity_curve: EquityPointDTO[];
+  trades: TradeDTO[];
+}
+
+export interface ExperimentListResponse {
+  experiments: ExperimentSummaryDTO[];
+  total: number;
+}
+

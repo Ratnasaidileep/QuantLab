@@ -4,10 +4,12 @@ import {
   executeComparison,
   fetchDatasets,
   fetchHealth,
+  saveExperiment,
 } from './api/client';
 import { ComparisonTable } from './components/ComparisonTable';
 import { ConfigPanel } from './components/ConfigPanel';
 import { EquityChart } from './components/EquityChart';
+import { ExperimentHistoryPanel } from './components/ExperimentHistoryPanel';
 import { MetricCards } from './components/MetricCards';
 import { Navbar } from './components/Navbar';
 import { ParameterHeatmap } from './components/ParameterHeatmap';
@@ -19,10 +21,11 @@ import type {
   BacktestResponse,
   ComparisonResponse,
   DatasetInfo,
+  ExperimentDetailDTO,
 } from './types';
 import './App.css';
 
-type ActiveTab = 'backtest' | 'walk-forward' | 'parameter-heatmap';
+type ActiveTab = 'backtest' | 'walk-forward' | 'parameter-heatmap' | 'experiment-history';
 
 export function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('backtest');
@@ -123,6 +126,89 @@ export function App() {
     }
   };
 
+  const [isSaveOpen, setIsSaveOpen] = useState<boolean>(false);
+  const [saveExpName, setSaveExpName] = useState<string>('');
+  const [saveExpNotes, setSaveExpNotes] = useState<string>('');
+  const [isSavingExp, setIsSavingExp] = useState<boolean>(false);
+  const [saveFeedback, setSaveFeedback] = useState<string | null>(null);
+
+  const handleSaveExperiment = async () => {
+    if (!backtestResult || !saveExpName.trim()) return;
+    setIsSavingExp(true);
+    setSaveFeedback(null);
+    try {
+      await saveExperiment({
+        name: saveExpName.trim(),
+        notes: saveExpNotes.trim(),
+        dataset: backtestResult.dataset,
+        strategy: backtestResult.strategy_name,
+        parameters: {
+          fast_period: config.fast_period,
+          slow_period: config.slow_period,
+          rsi_period: config.rsi_period,
+          oversold: config.oversold,
+          overbought: config.overbought,
+          bb_period: config.bb_period,
+          bb_std_dev: config.bb_std_dev,
+        },
+        initial_cash: backtestResult.initial_cash,
+        commission_rate: config.commission_rate,
+        slippage_rate: config.slippage_rate,
+        sizing_mode: config.sizing_mode,
+        quantity_per_trade: config.quantity_per_trade,
+        final_equity: backtestResult.final_equity,
+        total_pnl: backtestResult.total_pnl,
+        total_return: backtestResult.metrics.total_return,
+        max_drawdown: backtestResult.metrics.max_drawdown,
+        total_trades: backtestResult.metrics.total_trades,
+        win_rate: backtestResult.metrics.win_rate,
+        profit_factor: backtestResult.metrics.profit_factor,
+        sharpe_ratio: backtestResult.metrics.sharpe_ratio,
+        sortino_ratio: backtestResult.metrics.sortino_ratio,
+        cagr: backtestResult.metrics.cagr,
+        equity_curve: backtestResult.equity_curve,
+        trades: backtestResult.trades,
+      });
+      setSaveFeedback('✅ Saved successfully to database!');
+      setSaveExpName('');
+      setSaveExpNotes('');
+      setIsSaveOpen(false);
+      setTimeout(() => setSaveFeedback(null), 4000);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to save experiment.';
+      setSaveFeedback(`❌ ${msg}`);
+    } finally {
+      setIsSavingExp(false);
+    }
+  };
+
+  const handleLoadExperiment = (exp: ExperimentDetailDTO) => {
+    setBacktestResult({
+      strategy_name: exp.strategy,
+      configuration: exp.name,
+      dataset: exp.dataset,
+      bars_processed: exp.equity_curve.length,
+      initial_cash: exp.initial_cash,
+      final_cash: exp.final_equity,
+      final_equity: exp.final_equity,
+      total_pnl: exp.total_pnl,
+      metrics: {
+        total_pnl: exp.total_pnl,
+        total_return: exp.total_return,
+        max_drawdown: exp.max_drawdown,
+        total_trades: exp.total_trades,
+        win_rate: exp.win_rate,
+        profit_factor: exp.profit_factor,
+        sharpe_ratio: exp.sharpe_ratio,
+        sortino_ratio: exp.sortino_ratio,
+        cagr: exp.cagr,
+      },
+      trades: exp.trades,
+      equity_curve: exp.equity_curve,
+    });
+    setActiveTab('backtest');
+  };
+
   return (
     <div className="quantlab-app">
       <Navbar apiStatus={apiStatus} apiVersion={apiVersion} />
@@ -169,6 +255,13 @@ export function App() {
             >
               🗺️ 2D Parameter Surface Heatmap
             </button>
+            <button
+              type="button"
+              className={`tab-btn ${activeTab === 'experiment-history' ? 'active' : ''}`}
+              onClick={() => setActiveTab('experiment-history')}
+            >
+              📁 Saved Experiments
+            </button>
           </div>
 
           {/* Active Tab Content */}
@@ -192,6 +285,62 @@ export function App() {
                             : `Fixed (${config.quantity_per_trade} shares)`}
                       </span>
                     </div>
+                  </div>
+
+                  {/* Save Experiment Bar */}
+                  <div className="save-experiment-bar">
+                    {!isSaveOpen ? (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                        <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                          {saveFeedback ? saveFeedback : 'Permanently log this simulation to your research database:'}
+                        </span>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => {
+                            setSaveExpName(`${backtestResult.strategy_name} (${backtestResult.dataset.replace('_daily.csv', '')})`);
+                            setIsSaveOpen(true);
+                          }}
+                        >
+                          💾 Save Experiment
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="save-experiment-form">
+                        <input
+                          type="text"
+                          className="save-experiment-input"
+                          placeholder="Experiment Title (e.g. Reliance MA 10/30 baseline)"
+                          value={saveExpName}
+                          onChange={(e) => setSaveExpName(e.target.value)}
+                          disabled={isSavingExp}
+                        />
+                        <input
+                          type="text"
+                          className="save-experiment-notes"
+                          placeholder="Notes (optional, e.g. tested under 0.1% friction)"
+                          value={saveExpNotes}
+                          onChange={(e) => setSaveExpNotes(e.target.value)}
+                          disabled={isSavingExp}
+                        />
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-sm"
+                          onClick={handleSaveExperiment}
+                          disabled={isSavingExp || !saveExpName.trim()}
+                        >
+                          {isSavingExp ? <span className="spinner"></span> : 'Save to DB'}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => setIsSaveOpen(false)}
+                          disabled={isSavingExp}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   <MetricCards
@@ -253,6 +402,13 @@ export function App() {
               slippageRate={config.slippage_rate}
               sizingMode={config.sizing_mode}
               quantityPerTrade={config.quantity_per_trade}
+            />
+          )}
+
+          {activeTab === 'experiment-history' && (
+            <ExperimentHistoryPanel
+              datasets={datasets}
+              onLoadExperiment={handleLoadExperiment}
             />
           )}
 

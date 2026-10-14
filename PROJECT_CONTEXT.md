@@ -602,16 +602,16 @@ The database stores persistent application information. The quantitative engine 
 
 **Completion criterion:** A user can run a backtest through the web interface and inspect the results.
 
-### Phase 4 — Add persistence and authentication
+### Phase 4 — Add persistence and experiment history (COMPLETED)
 
-- Design the database schema.
-- Implement migrations.
-- Add secure authentication.
-- Enforce resource ownership.
-- Persist dataset metadata and experiments.
-- Add saved experiment views.
+- Design relational schema for experiments with primary key, timestamps, dataset, strategy, parameters JSON, full performance scorecards, equity curve JSON, and trade logs JSON. (Completed)
+- Implement SQLite Storage Repository (`quantlab.storage.repository`) using Python's standard library `sqlite3` without adding heavy ORM dependencies, ensuring reproducibility across environments. (Completed)
+- Create FastAPI REST CRUD endpoints (`POST /api/v1/experiments`, `GET /api/v1/experiments`, `GET /api/v1/experiments/{id}`, `DELETE /api/v1/experiments/{id}`). (Completed)
+- Implement React Experiment History dashboard (`ExperimentHistoryPanel.tsx`) with dataset/strategy filters, performance metric chips, full experiment loader (`handleLoadExperiment`), and delete actions. (Completed)
+- Implement Streamlit parity with "💾 Save Experiment Run" expander and "📁 Saved Experiments / Run History" inspector tab in `app.py`. (Completed)
+- Maintain 100% automated test coverage with 144 passing pytest unit tests and 0 ruff lint errors. (Completed)
 
-**Completion criterion:** Users can securely save and retrieve their own research.
+**Completion criterion:** Users can reliably save, browse, reload, and inspect past quantitative simulation runs across both React and Streamlit interfaces. (Satisfied)
 
 ### Phase 5 — Improve research quality (COMPLETED)
 

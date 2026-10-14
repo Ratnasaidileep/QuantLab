@@ -1,7 +1,7 @@
 from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from quantlab.api.routes import analytics, backtest, compare, datasets, health
+from quantlab.api.routes import analytics, backtest, compare, datasets, experiments, health
 
 
 def create_app() -> FastAPI:
@@ -31,6 +31,7 @@ def create_app() -> FastAPI:
     api_v1_router.include_router(backtest.router)
     api_v1_router.include_router(compare.router)
     api_v1_router.include_router(analytics.router)
+    api_v1_router.include_router(experiments.router)
 
     app.include_router(api_v1_router)
 

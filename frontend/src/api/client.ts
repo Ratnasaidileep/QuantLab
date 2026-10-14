@@ -4,8 +4,11 @@ import type {
   ComparisonResponse,
   DatasetInfo,
   DatasetUploadResponse,
+  ExperimentDetailDTO,
+  ExperimentListResponse,
   ParameterHeatmapRequest,
   ParameterHeatmapResponse,
+  SaveExperimentRequest,
   WalkForwardRequest,
   WalkForwardResponse,
 } from '../types';
@@ -201,3 +204,71 @@ export async function executeParameterHeatmap(
 
   return response.json();
 }
+
+export async function saveExperiment(
+  request: SaveExperimentRequest,
+): Promise<ExperimentDetailDTO> {
+  const response = await fetch(`${API_BASE}/experiments`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    let message = 'Failed to save experiment.';
+    if (errorData.detail) {
+      if (typeof errorData.detail === 'string') {
+        message = errorData.detail;
+      } else if (Array.isArray(errorData.detail)) {
+        message = errorData.detail.map((e: { msg?: string }) => e.msg || '').join('; ');
+      }
+    }
+    throw new Error(message);
+  }
+
+  return response.json();
+}
+
+export async function fetchExperiments(
+  dataset?: string,
+  strategy?: string,
+): Promise<ExperimentListResponse> {
+  const params = new URLSearchParams();
+  if (dataset) params.append('dataset', dataset);
+  if (strategy) params.append('strategy', strategy);
+
+  const query = params.toString() ? `?${params.toString()}` : '';
+  const response = await fetch(`${API_BASE}/experiments${query}`);
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch experiments: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+export async function fetchExperimentById(id: number): Promise<ExperimentDetailDTO> {
+  const response = await fetch(`${API_BASE}/experiments/${id}`);
+
+  if (!response.ok) {
+    throw new Error(`Failed to load experiment ${id}: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+export async function deleteExperiment(id: number): Promise<{ message: string; id: number }> {
+  const response = await fetch(`${API_BASE}/experiments/${id}`, {
+    method: 'DELETE',
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to delete experiment ${id}: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
