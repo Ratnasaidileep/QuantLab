@@ -418,3 +418,148 @@ def test_backtest_accepts_custom_strategy():
     assert result.bars_processed == 3
     assert len(result.equity_curve) == 3
     assert result.trades
+
+
+def test_backtest_invalid_sizing_parameters():
+    with pytest.raises(ValueError, match="Unsupported sizing mode"):
+        Backtest(initial_cash=1000.0, sizing_mode="invalid")
+
+    with pytest.raises(ValueError, match="quantity_per_trade must be positive"):
+        Backtest(initial_cash=1000.0, quantity_per_trade=0.0)
+
+
+def test_backtest_fixed_quantity_sizing():
+    class AlwaysLongStrategy:
+        def generate_signal(self, prices):
+            return Signal.LONG
+
+    start = datetime(2025, 1, 1, tzinfo=UTC)
+    bars = [
+        Bar(
+            timestamp=start,
+            open=10.0,
+            high=10.0,
+            low=10.0,
+            close=10.0,
+            volume=1000.0,
+        ),
+        Bar(
+            timestamp=start + timedelta(days=1),
+            open=10.0,
+            high=12.0,
+            low=10.0,
+            close=12.0,
+            volume=1000.0,
+        ),
+    ]
+
+    backtest = Backtest(
+        initial_cash=1000.0,
+        strategy=AlwaysLongStrategy(),
+        sizing_mode="fixed_quantity",
+        quantity_per_trade=5.0,
+    )
+    result = backtest.run(bars)
+
+    assert len(result.trades) == 1
+    assert result.trades[0].quantity == 5.0
+    assert result.final_cash == 950.0  # 1000 - 5 * 10
+    assert result.final_equity == 1010.0  # 950 + 5 * 12
+
+
+def test_backtest_all_in_sizing():
+    class EnterThenExitStrategy:
+        def generate_signal(self, prices):
+            if len(prices) == 1:
+                return Signal.LONG
+            return Signal.FLAT
+
+    start = datetime(2025, 1, 1, tzinfo=UTC)
+    bars = [
+        Bar(
+            timestamp=start,
+            open=10.0,
+            high=10.0,
+            low=10.0,
+            close=10.0,
+            volume=1000.0,
+        ),
+        Bar(
+            timestamp=start + timedelta(days=1),
+            open=20.0,
+            high=20.0,
+            low=20.0,
+            close=20.0,
+            volume=1000.0,
+        ),
+        Bar(
+            timestamp=start + timedelta(days=2),
+            open=30.0,
+            high=30.0,
+            low=30.0,
+            close=30.0,
+            volume=1000.0,
+        ),
+    ]
+
+    # Cash 105.0. On bar 1 open=20.0, cost per share=20.0 -> max whole shares = 5.0 (cost 100.0, cash left 5.0)
+    backtest = Backtest(
+        initial_cash=105.0,
+        strategy=EnterThenExitStrategy(),
+        sizing_mode="all_in",
+    )
+    result = backtest.run(bars)
+
+    assert len(result.trades) == 2
+    buy_trade = result.trades[0]
+    sell_trade = result.trades[1]
+
+    assert buy_trade.side == TradeSide.BUY
+    assert buy_trade.quantity == 5.0
+    assert buy_trade.price == 20.0
+
+    assert sell_trade.side == TradeSide.SELL
+    assert sell_trade.quantity == 5.0
+    assert sell_trade.price == 30.0
+
+    # Cash should be 5.0 remaining + (5 * 30.0) = 155.0
+    assert result.final_cash == 155.0
+    assert result.final_equity == 155.0
+
+
+def test_backtest_all_in_insufficient_cash_for_one_share():
+    class AlwaysLongStrategy:
+        def generate_signal(self, prices):
+            return Signal.LONG
+
+    start = datetime(2025, 1, 1, tzinfo=UTC)
+    bars = [
+        Bar(
+            timestamp=start,
+            open=100.0,
+            high=100.0,
+            low=100.0,
+            close=100.0,
+            volume=1000.0,
+        ),
+        Bar(
+            timestamp=start + timedelta(days=1),
+            open=100.0,
+            high=100.0,
+            low=100.0,
+            close=100.0,
+            volume=1000.0,
+        ),
+    ]
+
+    backtest = Backtest(
+        initial_cash=50.0,  # Less than open price of 100.0
+        strategy=AlwaysLongStrategy(),
+        sizing_mode="all_in",
+    )
+    result = backtest.run(bars)
+
+    assert len(result.trades) == 0
+    assert result.final_cash == 50.0
+    assert result.final_equity == 50.0
+

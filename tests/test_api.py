@@ -1,0 +1,391 @@
+import pytest
+from fastapi.testclient import TestClient
+
+from quantlab.api.main import app
+
+
+@pytest.fixture
+def client() -> TestClient:
+    return TestClient(app)
+
+
+def test_root_endpoint(client: TestClient):
+    response = client.get("/")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["app"] == "QuantLab API"
+    assert data["documentation"] == "/docs"
+    assert data["health"] == "/api/v1/health"
+
+
+def test_health_endpoint(client: TestClient):
+    response = client.get("/api/v1/health")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "ok"
+    assert data["app"] == "QuantLab"
+    assert data["version"] == "0.1.0"
+
+
+def test_datasets_endpoint(client: TestClient):
+    response = client.get("/api/v1/datasets")
+    assert response.status_code == 200
+    data = response.json()
+    assert "datasets" in data
+    assert isinstance(data["datasets"], list)
+    assert len(data["datasets"]) >= 1
+
+    dataset_names = [d["filename"] for d in data["datasets"]]
+    assert "reliance_daily.csv" in dataset_names
+
+    reliance = next(d for d in data["datasets"] if d["filename"] == "reliance_daily.csv")
+    assert reliance["symbol"] == "RELIANCE"
+    assert reliance["bars_count"] == 441
+    assert reliance["start_date"] == "2025-01-01"
+
+
+def test_backtest_ma_strategy_success(client: TestClient):
+    payload = {
+        "dataset": "reliance_daily.csv",
+        "strategy": "moving_average",
+        "fast_period": 10,
+        "slow_period": 30,
+        "initial_cash": 100000.0,
+        "commission_rate": 0.001,
+        "slippage_rate": 0.001,
+        "sizing_mode": "unit",
+    }
+    response = client.post("/api/v1/backtest", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["strategy_name"] == "Moving Average Crossover"
+    assert "Fast 10 / Slow 30" in data["configuration"]
+    assert data["bars_processed"] == 441
+    assert data["initial_cash"] == 100000.0
+    assert len(data["equity_curve"]) == 441
+    assert len(data["trades"]) == 18
+
+    metrics = data["metrics"]
+    assert metrics["total_trades"] == 18
+    assert metrics["win_rate"] == pytest.approx(0.333, rel=1e-2)
+    assert metrics["profit_factor"] == pytest.approx(0.73, rel=1e-2)
+    assert metrics["sharpe_ratio"] is not None
+    assert metrics["cagr"] is not None
+
+
+def test_backtest_rsi_strategy_success(client: TestClient):
+    payload = {
+        "dataset": "reliance_daily.csv",
+        "strategy": "rsi",
+        "rsi_period": 14,
+        "oversold": 30.0,
+        "overbought": 70.0,
+        "initial_cash": 100000.0,
+        "commission_rate": 0.001,
+        "slippage_rate": 0.001,
+        "sizing_mode": "unit",
+    }
+    response = client.post("/api/v1/backtest", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["strategy_name"] == "RSI"
+    assert data["bars_processed"] == 441
+    assert len(data["trades"]) == 5
+
+    metrics = data["metrics"]
+    assert metrics["win_rate"] == 1.0
+    assert metrics["total_pnl"] > 0.0
+
+
+def test_backtest_bollinger_strategy_success(client: TestClient):
+    payload = {
+        "dataset": "reliance_daily.csv",
+        "strategy": "bollinger",
+        "bb_period": 20,
+        "bb_std_dev": 2.0,
+        "initial_cash": 100000.0,
+        "commission_rate": 0.001,
+        "slippage_rate": 0.001,
+        "sizing_mode": "unit",
+    }
+    response = client.post("/api/v1/backtest", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["strategy_name"] == "Bollinger Bands"
+    assert data["bars_processed"] == 441
+    assert "Period 20 / StdDev 2" in data["configuration"]
+    assert len(data["trades"]) >= 1
+    assert data["metrics"] is not None
+
+
+def test_backtest_all_in_sizing(client: TestClient):
+    payload = {
+        "dataset": "reliance_daily.csv",
+        "strategy": "moving_average",
+        "fast_period": 10,
+        "slow_period": 30,
+        "initial_cash": 100000.0,
+        "commission_rate": 0.001,
+        "slippage_rate": 0.001,
+        "sizing_mode": "all_in",
+    }
+    response = client.post("/api/v1/backtest", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+
+    # Under all-in sizing, trades will have quantity > 1.0
+    first_trade = data["trades"][0]
+    assert first_trade["quantity"] > 1.0
+
+
+def test_backtest_invalid_ma_parameters(client: TestClient):
+    payload = {
+        "dataset": "reliance_daily.csv",
+        "strategy": "moving_average",
+        "fast_period": 30,
+        "slow_period": 10,  # Fast >= Slow
+    }
+    response = client.post("/api/v1/backtest", json=payload)
+    assert response.status_code == 422
+
+
+def test_backtest_invalid_rsi_parameters(client: TestClient):
+    payload = {
+        "dataset": "reliance_daily.csv",
+        "strategy": "rsi",
+        "oversold": 80.0,
+        "overbought": 20.0,  # Oversold >= Overbought
+    }
+    response = client.post("/api/v1/backtest", json=payload)
+    assert response.status_code == 422
+
+
+def test_backtest_invalid_bollinger_parameters(client: TestClient):
+    payload = {
+        "dataset": "reliance_daily.csv",
+        "strategy": "bollinger",
+        "bb_period": 1,  # period < 2
+        "bb_std_dev": -1.0,
+    }
+    response = client.post("/api/v1/backtest", json=payload)
+    assert response.status_code == 422
+
+
+def test_backtest_nonexistent_dataset(client: TestClient):
+    payload = {
+        "dataset": "nonexistent_file.csv",
+        "strategy": "moving_average",
+    }
+    response = client.post("/api/v1/backtest", json=payload)
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
+
+
+def test_compare_endpoint_success(client: TestClient):
+    payload = {
+        "dataset": "reliance_daily.csv",
+        "initial_cash": 100000.0,
+        "commission_rate": 0.001,
+        "slippage_rate": 0.001,
+        "ma_parameter_pairs": [[2, 3], [10, 30]],
+        "rsi_configurations": [[14, 30.0, 70.0]],
+        "bb_configurations": [[20, 2.0]],
+        "include_buy_and_hold": True,
+    }
+    response = client.post("/api/v1/compare", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["dataset"] == "reliance_daily.csv"
+    assert len(data["results"]) == 5  # 2 MA + 1 RSI + 1 BB + 1 BnH
+    assert data["best_strategy"] is not None
+
+    strategy_names = [item["strategy_name"] for item in data["results"]]
+    assert "Moving Average Crossover" in strategy_names
+    assert "RSI" in strategy_names
+    assert "Bollinger Bands" in strategy_names
+    assert "Buy and Hold" in strategy_names
+
+
+def test_compare_endpoint_invalid_parameters(client: TestClient):
+    payload = {
+        "dataset": "reliance_daily.csv",
+        "ma_parameter_pairs": [[30, 10]],  # Invalid: fast >= slow
+    }
+    response = client.post("/api/v1/compare", json=payload)
+    assert response.status_code == 422
+
+
+def test_compare_endpoint_nonexistent_dataset(client: TestClient):
+    payload = {
+        "dataset": "missing_data.csv",
+    }
+    response = client.post("/api/v1/compare", json=payload)
+    assert response.status_code == 404
+
+
+def test_walk_forward_endpoint_success(client: TestClient):
+    payload = {
+        "dataset": "reliance_daily.csv",
+        "strategy": "moving_average",
+        "num_windows": 3,
+        "window_mode": "rolling",
+        "initial_cash": 100000.0,
+    }
+    response = client.post("/api/v1/analytics/walk-forward", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["strategy_name"] == "moving_average"
+    assert data["total_bars"] == 441
+    assert len(data["windows"]) >= 2
+    assert data["robustness_grade"] is not None
+    assert data["explanation"] is not None
+    assert len(data["stitched_equity_curve"]) > 1
+
+
+def test_walk_forward_bollinger_endpoint_success(client: TestClient):
+    payload = {
+        "dataset": "reliance_daily.csv",
+        "strategy": "bollinger",
+        "num_windows": 3,
+        "window_mode": "rolling",
+        "initial_cash": 100000.0,
+    }
+    response = client.post("/api/v1/analytics/walk-forward", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["strategy_name"] == "bollinger"
+    assert data["total_bars"] == 441
+    assert len(data["windows"]) >= 2
+    assert "period" in data["windows"][0]["best_parameters"]
+
+
+def test_walk_forward_endpoint_nonexistent_dataset(client: TestClient):
+    payload = {
+        "dataset": "missing.csv",
+    }
+    response = client.post("/api/v1/analytics/walk-forward", json=payload)
+    assert response.status_code == 404
+
+
+def test_parameter_heatmap_endpoint_success(client: TestClient):
+    payload = {
+        "dataset": "reliance_daily.csv",
+        "fast_periods": [2, 5],
+        "slow_periods": [15, 30],
+        "initial_cash": 100000.0,
+    }
+    response = client.post("/api/v1/analytics/parameter-heatmap", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["total_combinations"] == 4
+    assert len(data["grid"]) == 4
+    assert data["stability_verdict"] is not None
+    assert 0.0 <= data["plateau_ratio"] <= 1.0
+
+
+def test_parameter_heatmap_endpoint_nonexistent_dataset(client: TestClient):
+    payload = {
+        "dataset": "missing.csv",
+    }
+    response = client.post("/api/v1/analytics/parameter-heatmap", json=payload)
+    assert response.status_code == 404
+
+
+def test_upload_dataset_success(client: TestClient):
+    from pathlib import Path
+
+    csv_content = (
+        "timestamp,open,high,low,close,volume\n"
+        "2026-01-01,100,105,98,102,1000\n"
+        "2026-01-02,102,106,101,105,1200\n"
+        "2026-01-03,105,108,103,107,1500\n"
+        "2026-01-04,107,109,104,106,1100\n"
+        "2026-01-05,106,110,105,109,1300\n"
+    )
+    files = {"file": ("test_upload_sample.csv", csv_content.encode("utf-8"), "text/csv")}
+    response = client.post("/api/v1/datasets/upload", files=files)
+    assert response.status_code == 200
+    data = response.json()
+    assert "Successfully uploaded" in data["message"]
+    assert data["dataset"]["bars_count"] == 5
+    assert data["dataset"]["symbol"] == "TEST_UPLOAD_SAMPLE"
+
+    # Clean up generated file
+    test_file = Path("data/test_upload_sample.csv")
+    if test_file.exists():
+        test_file.unlink()
+
+
+def test_upload_dataset_invalid_extension(client: TestClient):
+    files = {"file": ("sample.txt", b"some text", "text/plain")}
+    response = client.post("/api/v1/datasets/upload", files=files)
+    assert response.status_code == 400
+    assert "must be a .csv file" in response.json()["detail"].lower()
+
+
+def test_upload_dataset_empty_file(client: TestClient):
+    files = {"file": ("empty.csv", b"", "text/csv")}
+    response = client.post("/api/v1/datasets/upload", files=files)
+    assert response.status_code == 400
+    assert "empty" in response.json()["detail"].lower()
+
+
+def test_upload_dataset_missing_columns(client: TestClient):
+    csv_content = "timestamp,open,high,low,close\n2026-01-01,100,105,98,102\n"
+    files = {"file": ("bad_sample.csv", csv_content.encode("utf-8"), "text/csv")}
+    response = client.post("/api/v1/datasets/upload", files=files)
+    assert response.status_code == 400
+    assert "missing required columns" in response.json()["detail"].lower()
+
+
+def test_fetch_dataset_mocked(client: TestClient, monkeypatch):
+    from datetime import UTC, datetime
+    from pathlib import Path
+
+    from quantlab.data.models import Bar
+
+    fake_bars = [
+        Bar(timestamp=datetime(2026, 1, 1, tzinfo=UTC), open=100.0, high=105.0, low=98.0, close=102.0, volume=1000.0),
+        Bar(timestamp=datetime(2026, 1, 2, tzinfo=UTC), open=102.0, high=106.0, low=101.0, close=105.0, volume=1100.0),
+        Bar(timestamp=datetime(2026, 1, 3, tzinfo=UTC), open=105.0, high=108.0, low=103.0, close=107.0, volume=1200.0),
+        Bar(timestamp=datetime(2026, 1, 4, tzinfo=UTC), open=107.0, high=109.0, low=104.0, close=106.0, volume=1300.0),
+        Bar(timestamp=datetime(2026, 1, 5, tzinfo=UTC), open=106.0, high=110.0, low=105.0, close=109.0, volume=1400.0),
+    ]
+
+    def mock_fetch(symbol: str, period: str = "2y"):
+        return fake_bars
+
+    monkeypatch.setattr("quantlab.api.routes.datasets.fetch_ohlcv_from_yfinance", mock_fetch)
+
+    payload = {"symbol": "TEST_TICKER", "period": "1y"}
+    response = client.post("/api/v1/datasets/fetch", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert "Successfully downloaded" in data["message"]
+    assert data["dataset"]["bars_count"] == 5
+    assert data["dataset"]["symbol"] == "TEST_TICKER"
+
+    # Clean up generated file
+    test_file = Path("data/test_ticker_daily.csv")
+    if test_file.exists():
+        test_file.unlink()
+
+
+def test_fetch_dataset_error(client: TestClient, monkeypatch):
+    def mock_fetch_error(symbol: str, period: str = "2y"):
+        raise ValueError("Ticker not found")
+
+    monkeypatch.setattr("quantlab.api.routes.datasets.fetch_ohlcv_from_yfinance", mock_fetch_error)
+
+    payload = {"symbol": "UNKNOWN", "period": "1y"}
+    response = client.post("/api/v1/datasets/fetch", json=payload)
+    assert response.status_code == 400
+    assert "could not download" in response.json()["detail"].lower()
+

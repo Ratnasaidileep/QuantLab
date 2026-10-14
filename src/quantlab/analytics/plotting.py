@@ -11,6 +11,7 @@ def plot_backtest_results(
     bars: Sequence[Bar],
     equity_curve: Sequence[float],
     trades: Sequence[Trade],
+    symbol: str = "Price",
 ):
     """Plot price, executed trades, and portfolio equity."""
 
@@ -29,10 +30,12 @@ def plot_backtest_results(
         sharex=True,
     )
 
+    price_label = f"{symbol} Close" if symbol else "Close"
+
     price_axis.plot(
         timestamps,
         prices,
-        label="RELIANCE Close",
+        label=price_label,
     )
 
     buy_trades = [

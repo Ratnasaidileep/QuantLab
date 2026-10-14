@@ -39,6 +39,8 @@ class Backtest:
         commission_rate: float = 0.0,
         slippage_rate: float = 0.0,
         use_crossover: bool = False,
+        sizing_mode: str = "unit",
+        quantity_per_trade: float = 1.0,
     ) -> None:
         if initial_cash < 0:
             raise ValueError("Initial cash cannot be negative.")
@@ -48,6 +50,14 @@ class Backtest:
 
         if slippage_rate < 0:
             raise ValueError("Slippage rate cannot be negative.")
+
+        if sizing_mode not in ("unit", "fixed_quantity", "all_in"):
+            raise ValueError(
+                f"Unsupported sizing mode '{sizing_mode}'. Supported modes: 'unit', 'fixed_quantity', 'all_in'."
+            )
+
+        if quantity_per_trade <= 0:
+            raise ValueError("quantity_per_trade must be positive.")
 
         self.initial_cash = initial_cash
         self.cash = initial_cash
@@ -59,6 +69,8 @@ class Backtest:
         self.commission_rate = commission_rate
         self.slippage_rate = slippage_rate
         self.use_crossover = use_crossover
+        self.sizing_mode = sizing_mode
+        self.quantity_per_trade = quantity_per_trade
 
     @property
     def position(self):
@@ -93,19 +105,34 @@ class Backtest:
             if pending_signal == Signal.LONG:
                 if self.position.quantity == 0.0:
                     execution_price = bar.open * (1.0 + self.slippage_rate)
-                    commission = execution_price * self.commission_rate
-                    total_cost = execution_price + commission
+                    cost_per_unit = execution_price * (1.0 + self.commission_rate)
 
-                    if self.cash >= total_cost:
+                    if self.sizing_mode == "unit":
+                        trade_quantity = 1.0
+                    elif self.sizing_mode == "fixed_quantity":
+                        trade_quantity = self.quantity_per_trade
+                    elif self.sizing_mode == "all_in":
+                        trade_quantity = (
+                            float(int(self.cash // cost_per_unit))
+                            if cost_per_unit > 0
+                            else 0.0
+                        )
+
+                    total_cost = trade_quantity * cost_per_unit
+                    commission = (
+                        trade_quantity * execution_price * self.commission_rate
+                    )
+
+                    if trade_quantity > 0.0 and self.cash >= total_cost:
                         self.cash -= total_cost
-                        self.portfolio.update(Signal.LONG, 1.0)
+                        self.portfolio.update(Signal.LONG, trade_quantity)
 
                         trades.append(
                             Trade(
                                 timestamp=bar.timestamp,
                                 side=TradeSide.BUY,
                                 price=execution_price,
-                                quantity=1.0,
+                                quantity=trade_quantity,
                                 commission=commission,
                             )
                         )
@@ -170,6 +197,7 @@ class Backtest:
             calculate_metrics(
                 initial_cash=self.initial_cash,
                 equity_curve=equity_curve,
+                trades=trades,
             )
             if equity_curve
             else None

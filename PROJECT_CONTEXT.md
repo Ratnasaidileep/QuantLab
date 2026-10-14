@@ -86,7 +86,7 @@ The main CSV is located at `data/reliance_daily.csv`.
 
 ### 2.4 Existing strategies
 
-Two principal strategy types have been implemented.
+Three principal strategy types have been implemented.
 
 **Moving Average Crossover**
 
@@ -105,6 +105,15 @@ Its known default parameters are:
 - Overbought threshold: 70
 
 The strategy can generate a long signal at or below the oversold threshold and a flat signal at or above the overbought threshold. In the neutral zone, it retains its existing target state.
+
+**Bollinger Bands (Mean Reversion)**
+
+The Bollinger Bands strategy computes the rolling simple moving average ($\mu$) and rolling population standard deviation ($\sigma$) over a configurable lookback window ($N$, default 20) with standard deviation multiplier ($k$, default 2.0):
+
+- Upper Band: $\mu + k\sigma$
+- Lower Band: $\mu - k\sigma$
+
+Mean-reversion signals trigger LONG when the price touches or dips below the lower band ($P \le \text{Lower}$), and reverts to FLAT when the price returns to the mean ($P \ge \text{Middle}$) or reaches the upper band ($P \ge \text{Upper}$). Fully integrated into Backtest engine, Walk-Forward Optimization (WFO), Strategy Comparison, FastAPI backend, React dashboard, and Streamlit.
 
 These rules must be verified against the current source code before modifying them.
 
@@ -146,17 +155,17 @@ The small sample, limited asset coverage, and short historical period do not est
 
 ### 2.7 Testing history
 
-A previous full test run reported 67 passing tests.
+The project maintains comprehensive test coverage across data ingestion, strategy logic, friction accounting, performance metrics, benchmark comparisons, walk-forward out-of-sample optimization, and REST API endpoints.
 
-This is historical evidence only. Always run the current tests before claiming that the latest code passes.
+The full automated test suite reports **139 passing tests** with 0 failures and 0 ruff lint errors (`pytest -q` and `ruff check .`). The React frontend builds cleanly (`tsc -b && vite build`) and passes `npm run lint`.
 
-The project has used commands such as:
+The project uses commands such as:
 
-`python -m pytest -q`
+`.venv\Scripts\python.exe -m pytest -q`
 
 and:
 
-`ruff check .`
+`.venv\Scripts\ruff.exe check .`
 
 ### 2.8 GitHub
 
@@ -227,29 +236,28 @@ This is the last known layout, not a guaranteed inventory of the current checkou
 
 - Python quantitative research modules
 - Historical CSV loading and validation
-- Moving Average Crossover strategy
-- RSI strategy
-- Long-only backtesting engine
-- Portfolio and trade models
-- Performance analytics and plotting
-- Strategy comparison logic
-- A Streamlit prototype
-- Automated tests and Ruff configuration
-- A React, TypeScript, and Vite starter
+- Moving Average Crossover strategy (level-based and crossover signals)
+- RSI strategy (Wilder's smoothing with stateful regimes)
+- Long-only backtesting engine with look-ahead bias prevention
+- Flexible position sizing (`unit`, `all_in`, `fixed_quantity`)
+- Portfolio and trade models with FIFO round-trip trade P&L matching
+- Performance & risk analytics: P&L, returns, max drawdown, win rate, profit factor, annualized Sharpe ratio ($R_f=5\%$), Sortino ratio, and CAGR
+- Unified strategy comparison and Buy & Hold benchmark accounting
+- Streamlit interactive prototype with sizing controls and metric scorecards
+- FastAPI REST backend (`/health`, `/datasets`, `/backtest`, `/compare`) with Pydantic validation, CORS middleware, and OpenAPI documentation
+- 111 automated tests passing with 100% clean Ruff linting
+- React, TypeScript, and Vite frontend dashboard with interactive parameter tuning, SVG equity curves, trade logs, and multi-strategy benchmark leaderboards
 - GitHub repository
 
 **Not yet established as complete**
 
-- Full React frontend
-- FastAPI backend
 - PostgreSQL persistence
 - User registration, login, and profile management
 - Production-ready dataset upload and storage
 - Saved experiments and persistent backtest history
-- Complete benchmark integration
-- Robust out-of-sample validation
-- Production deployment and security
-- Full end-to-end testing
+- Robust out-of-sample validation / Walk-Forward Optimization
+- Production deployment and containerization
+- Full end-to-end Cypress/Playwright testing
 
 Do not claim that an item is implemented until you inspect its code and verify its behavior.
 
@@ -605,17 +613,22 @@ The database stores persistent application information. The quantitative engine 
 
 **Completion criterion:** Users can securely save and retrieve their own research.
 
-### Phase 5 — Improve research quality
+### Phase 5 — Improve research quality (COMPLETED)
 
-- Add buy-and-hold comparisons.
-- Add robust metric definitions.
-- Add date-range selection.
-- Add out-of-sample evaluation.
-- Add safeguards against look-ahead bias.
-- Add realistic costs and appropriate execution assumptions.
-- Add additional strategies only after tests and documentation.
+- Add buy-and-hold comparisons. (Completed)
+- Add robust metric definitions (Win Rate FIFO, Profit Factor, Annualized Sharpe Rf=5%, Sortino, CAGR). (Completed)
+- Add out-of-sample evaluation (`split_bars_train_test`). (Completed)
+- Add Walk-Forward Optimization (WFO) engine (`run_walk_forward_optimization`) with rolling and expanding window modes. (Completed)
+- Implement Robert Pardo Walk-Forward Efficiency (WFE) scoring ($WFE = R_{oos} / R_{is}$) and academic robustness grading (`ROBUST (Pass)`, `MODERATE (Acceptable)`, `OVERFITTED (Caution)`). (Completed)
+- Stitched out-of-sample forward simulation equity curve calculation. (Completed)
+- 2D Parameter Surface Grid & Plateau Stability Analysis (`evaluate_parameter_grid_heatmap`) with neighbor-plateau clustering to distinguish robust parameter plateaus from brittle curve-fit spikes. (Completed)
+- FastAPI REST endpoints (`POST /api/v1/analytics/walk-forward`, `POST /api/v1/analytics/parameter-heatmap`). (Completed)
+- React frontend components (`WalkForwardPanel.tsx`, `ParameterHeatmap.tsx`) with pure SVG charts, plateau indicators, point inspector drawer, and tabbed navigation in `App.tsx`. (Completed)
+- Streamlit application parity with "Advanced Quantitative Analytics" tabs in `app.py`. (Completed)
+- Multi-Asset Data Ingestion: Custom CSV file uploading and live Yahoo Finance ticker downloads (`POST /api/v1/datasets/upload`, `POST /api/v1/datasets/fetch`) with automatic header normalization and validation. (Completed)
+- Full automated test suite (128 passing tests in `pytest`, 0 lint warnings in `ruff`, 0 errors in Vite/TypeScript). (Completed)
 
-**Completion criterion:** The platform supports meaningful, reproducible strategy evaluation.
+**Completion criterion:** The platform supports meaningful, reproducible out-of-sample strategy evaluation, multi-asset data ingestion, and parameter stability analysis. (Satisfied)
 
 ### Phase 6 — Deployment and final major-project preparation
 

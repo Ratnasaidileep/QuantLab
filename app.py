@@ -1,7 +1,11 @@
 
 
+import io
+import math
+import re
 from pathlib import Path
 
+import pandas as pd
 import streamlit as st
 
 from quantlab.analytics.plotting import plot_backtest_results
@@ -9,13 +13,21 @@ from quantlab.analytics.strategy_comparison import (
     compare_buy_and_hold,
     compare_strategies,
 )
+from quantlab.analytics.walk_forward import (
+    evaluate_parameter_grid_heatmap,
+    run_walk_forward_optimization,
+)
 from quantlab.backtest.engine import Backtest
-from quantlab.data.csv_loader import load_bars_from_csv
+from quantlab.data.csv_loader import (
+    fetch_ohlcv_from_yfinance,
+    load_bars_from_csv,
+    save_bars_to_csv,
+)
+from quantlab.strategy.bollinger import BollingerBandsStrategy
 from quantlab.strategy.moving_average import MovingAverageCrossover
 from quantlab.strategy.rsi import RSIStrategy
 
-DATA_PATH = Path("data/reliance_daily.csv")
-
+DATA_DIR = Path("data")
 
 
 st.set_page_config(
@@ -33,8 +45,8 @@ st.title("📈 QuantLab")
 st.subheader("Quantitative Research & Backtesting Platform")
 
 st.write(
-    "Test quantitative trading strategies on historical RELIANCE "
-    "market data and evaluate performance after transaction costs."
+    "Test quantitative trading strategies on historical market data "
+    "and evaluate performance after transaction costs."
 )
 
 
@@ -42,11 +54,50 @@ st.write(
 # Sidebar
 # ---------------------------------------------------------
 
+st.sidebar.header("Market Dataset")
+
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+available_datasets = sorted([p.name for p in DATA_DIR.glob("*.csv")])
+if not available_datasets:
+    available_datasets = ["reliance_daily.csv"]
+
+selected_dataset = st.sidebar.selectbox("Select Asset Dataset", available_datasets)
+data_path = DATA_DIR / selected_dataset
+
+with st.sidebar.expander("📥 Ingest Market Data (Upload / Fetch)"):
+    upload_file = st.file_uploader("Upload OHLCV CSV", type=["csv"], key="sb_upload")
+    if upload_file is not None:
+        try:
+            content = upload_file.read()
+            df = pd.read_csv(io.StringIO(content.decode("utf-8", errors="replace")))
+            target = DATA_DIR / upload_file.name.lower()
+            df.to_csv(target, index=False)
+            bars = load_bars_from_csv(target)
+            save_bars_to_csv(bars, target)
+            st.success(f"Saved {len(bars)} bars: {upload_file.name}")
+            st.rerun()
+        except (ValueError, TypeError, OSError) as e:
+            st.error(f"Upload error: {e}")
+
+    ticker_sym = st.text_input("Download Ticker (Yahoo)", placeholder="e.g. TCS.NS, AAPL", key="sb_ticker")
+    ticker_period = st.selectbox("Period", ["1y", "2y", "5y", "max"], index=1, key="sb_period")
+    if st.button("Download Ticker Data", key="sb_fetch") and ticker_sym.strip():
+        with st.spinner(f"Downloading {ticker_sym.strip()}..."):
+            try:
+                bars = fetch_ohlcv_from_yfinance(ticker_sym.strip(), period=ticker_period)
+                safe_sym = re.sub(r"[^\w\-]", "_", ticker_sym.strip().upper()).lower()
+                target = DATA_DIR / f"{safe_sym}_daily.csv"
+                save_bars_to_csv(bars, target)
+                st.success(f"Downloaded {len(bars)} bars for {ticker_sym.strip()}!")
+                st.rerun()
+            except (ValueError, TypeError, OSError) as e:
+                st.error(f"Download failed: {e}")
+
 st.sidebar.header("Backtest Configuration")
 
 selected_strategy = st.sidebar.selectbox(
     "Trading Strategy",
-    ["Moving Average Crossover", "RSI"],
+    ["Moving Average Crossover", "RSI", "Bollinger Bands"],
 )
 
 initial_cash = st.sidebar.number_input(
@@ -77,7 +128,7 @@ if selected_strategy == "Moving Average Crossover":
         )
         st.stop()
 
-else:
+elif selected_strategy == "RSI":
     rsi_period = st.sidebar.number_input(
         "RSI Period",
         min_value=2,
@@ -108,6 +159,42 @@ else:
         )
         st.stop()
 
+else:
+    bb_period = st.sidebar.number_input(
+        "Bollinger Period (N)",
+        min_value=2,
+        value=20,
+        step=1,
+    )
+    bb_std_dev = st.sidebar.number_input(
+        "Std Dev Multiplier (k)",
+        min_value=0.1,
+        value=2.0,
+        step=0.1,
+        format="%.2f",
+    )
+    st.sidebar.caption("Statistical Mean Reversion: Buy at Lower Band (μ - kσ), exit at Middle SMA (μ).")
+
+sizing_label = st.sidebar.selectbox(
+    "Position Sizing",
+    ["Unit Trade (1 share)", "Full Capital (All-in)", "Fixed Quantity"],
+)
+
+if sizing_label == "Unit Trade (1 share)":
+    sizing_mode = "unit"
+    quantity_per_trade = 1.0
+elif sizing_label == "Full Capital (All-in)":
+    sizing_mode = "all_in"
+    quantity_per_trade = 1.0
+else:
+    sizing_mode = "fixed_quantity"
+    quantity_per_trade = st.sidebar.number_input(
+        "Shares per Trade",
+        min_value=1.0,
+        value=10.0,
+        step=1.0,
+    )
+
 commission_rate = st.sidebar.number_input(
     "Commission Rate",
     min_value=0.0,
@@ -134,8 +221,8 @@ run_backtest = st.sidebar.button(
 # Dataset Validation
 # ---------------------------------------------------------
 
-if not DATA_PATH.exists():
-    st.error(f"Dataset not found: {DATA_PATH}")
+if not data_path.exists():
+    st.error(f"Dataset not found: {data_path}")
     st.stop()
 
 
@@ -145,7 +232,7 @@ if not DATA_PATH.exists():
 
 if run_backtest:
     try:
-        bars = load_bars_from_csv(DATA_PATH)
+        bars = load_bars_from_csv(data_path)
 
         if not bars:
             st.error("The dataset contains no usable market bars.")
@@ -158,11 +245,18 @@ if run_backtest:
             )
             use_crossover = True
 
-        else:
+        elif selected_strategy == "RSI":
             strategy = RSIStrategy(
                 period=int(rsi_period),
                 oversold=float(rsi_oversold),
                 overbought=float(rsi_overbought),
+            )
+            use_crossover = False
+
+        else:
+            strategy = BollingerBandsStrategy(
+                period=int(bb_period),
+                std_dev_multiplier=float(bb_std_dev),
             )
             use_crossover = False
 
@@ -172,6 +266,8 @@ if run_backtest:
             commission_rate=commission_rate,
             slippage_rate=slippage_rate,
             use_crossover=use_crossover,
+            sizing_mode=sizing_mode,
+            quantity_per_trade=float(quantity_per_trade),
         )
 
         result = backtest.run(bars)
@@ -210,6 +306,56 @@ if run_backtest:
             "Max Drawdown",
             f"{result.metrics.max_drawdown:.2%}",
         )
+
+        metric_col5, metric_col6, metric_col7 = st.columns(3)
+
+        win_rate_str = (
+            f"{result.metrics.win_rate:.1%}"
+            if result.metrics.win_rate is not None
+            else "N/A"
+        )
+        if result.metrics.profit_factor is None:
+            pf_str = "N/A"
+        elif math.isinf(result.metrics.profit_factor):
+            pf_str = "∞ (No losses)"
+        else:
+            pf_str = f"{result.metrics.profit_factor:.2f}"
+
+        metric_col5.metric("Win Rate", win_rate_str)
+        metric_col6.metric("Profit Factor", pf_str)
+        metric_col7.metric("Executed Trades", result.metrics.total_trades)
+
+        metric_col8, metric_col9, metric_col10 = st.columns(3)
+
+        sharpe_str = (
+            f"{result.metrics.sharpe_ratio:.2f}"
+            if result.metrics.sharpe_ratio is not None
+            and not math.isinf(result.metrics.sharpe_ratio)
+            else (
+                "N/A"
+                if result.metrics.sharpe_ratio is None
+                else ("∞" if result.metrics.sharpe_ratio > 0 else "-∞")
+            )
+        )
+        sortino_str = (
+            f"{result.metrics.sortino_ratio:.2f}"
+            if result.metrics.sortino_ratio is not None
+            and not math.isinf(result.metrics.sortino_ratio)
+            else (
+                "N/A"
+                if result.metrics.sortino_ratio is None
+                else ("∞" if result.metrics.sortino_ratio > 0 else "0.00")
+            )
+        )
+        cagr_str = (
+            f"{result.metrics.cagr:.2%}"
+            if result.metrics.cagr is not None
+            else "N/A"
+        )
+
+        metric_col8.metric("Sharpe Ratio (Rf=5%)", sharpe_str)
+        metric_col9.metric("Sortino Ratio", sortino_str)
+        metric_col10.metric("CAGR", cagr_str)
     else:
         metric_col3.metric("Total Return", "N/A")
         metric_col4.metric("Max Drawdown", "N/A")
@@ -246,6 +392,7 @@ if run_backtest:
         config_col2.metric("Slow MA", slow_period)
         config_col3.metric("Commission", f"{commission_rate:.2%}")
         config_col4.metric("Slippage", f"{slippage_rate:.2%}")
+        st.caption(f"Position Sizing: {sizing_label}")
 
     else:
         config_col1, config_col2, config_col3, config_col4 = (
@@ -257,7 +404,7 @@ if run_backtest:
         config_col3.metric("Overbought", rsi_overbought)
         config_col4.metric("Commission", f"{commission_rate:.2%}")
 
-        st.caption(f"Slippage: {slippage_rate:.2%}")
+        st.caption(f"Slippage: {slippage_rate:.2%} | Position Sizing: {sizing_label}")
 
     # -----------------------------------------------------
     # Backtest Chart
@@ -269,6 +416,7 @@ if run_backtest:
         bars=bars,
         equity_curve=result.equity_curve,
         trades=result.trades,
+        symbol="RELIANCE",
     )
 
     st.pyplot(figure, use_container_width=True)
@@ -346,6 +494,16 @@ if run_backtest:
             (14, 30.0, 70.0),
         ]
 
+    if selected_strategy == "Bollinger Bands":
+        bb_comparison_configurations = [
+            (int(bb_period), float(bb_std_dev)),
+        ]
+    else:
+        bb_comparison_configurations = [
+            (10, 1.5),
+            (20, 2.0),
+        ]
+
     comparison_pairs = [
         (2, 3),
         (5, 20),
@@ -361,6 +519,9 @@ if run_backtest:
             slippage_rate=slippage_rate,
             ma_parameter_pairs=comparison_pairs,
             rsi_configurations=rsi_comparison_configurations,
+            bb_configurations=bb_comparison_configurations,
+            sizing_mode=sizing_mode,
+            quantity_per_trade=float(quantity_per_trade),
         )
         comparison_results.append(
             compare_buy_and_hold(
@@ -368,6 +529,8 @@ if run_backtest:
                 initial_cash=initial_cash,
                 commission_rate=commission_rate,
                 slippage_rate=slippage_rate,
+                sizing_mode=sizing_mode,
+                quantity_per_trade=float(quantity_per_trade),
             )
         )
 
@@ -387,6 +550,42 @@ if run_backtest:
                 "Max Drawdown (%)": round(
                     item.max_drawdown * 100,
                     2,
+                ),
+                "Win Rate (%)": (
+                    round(item.win_rate * 100, 1)
+                    if item.win_rate is not None
+                    else "N/A"
+                ),
+                "Profit Factor": (
+                    round(item.profit_factor, 2)
+                    if item.profit_factor is not None
+                    and not math.isinf(item.profit_factor)
+                    else ("∞" if item.profit_factor == float("inf") else "N/A")
+                ),
+                "Sharpe": (
+                    round(item.sharpe_ratio, 2)
+                    if item.sharpe_ratio is not None
+                    and not math.isinf(item.sharpe_ratio)
+                    else (
+                        "N/A"
+                        if item.sharpe_ratio is None
+                        else ("∞" if item.sharpe_ratio > 0 else "-∞")
+                    )
+                ),
+                "Sortino": (
+                    round(item.sortino_ratio, 2)
+                    if item.sortino_ratio is not None
+                    and not math.isinf(item.sortino_ratio)
+                    else (
+                        "N/A"
+                        if item.sortino_ratio is None
+                        else ("∞" if item.sortino_ratio > 0 else "0.00")
+                    )
+                ),
+                "CAGR (%)": (
+                    round(item.cagr * 100, 2)
+                    if item.cagr is not None
+                    else "N/A"
                 ),
             }
             for item in comparison_results
@@ -458,3 +657,146 @@ else:
         "Configure the strategy parameters in the sidebar and click "
         "**Run Backtest** to begin."
     )
+
+
+# ---------------------------------------------------------
+# Advanced Quantitative Analytics (WFO & Parameter Surface)
+# ---------------------------------------------------------
+
+st.divider()
+st.header("Advanced Quantitative Analytics")
+
+analytics_tab_wfo, analytics_tab_heatmap = st.tabs([
+    "🔄 Walk-Forward Optimization (Out-of-Sample)",
+    "🗺️ 2D Parameter Surface & Stability Heatmap",
+])
+
+with analytics_tab_wfo:
+    st.subheader("Walk-Forward Out-of-Sample Optimization (WFO)")
+    st.write(
+        "Evaluate trading strategy robustness using Pardo (2008) rolling or expanding "
+        "walk-forward optimization to detect curve-fitting and measure out-of-sample efficiency."
+    )
+    wfo_col1, wfo_col2, wfo_col3, wfo_col4 = st.columns(4)
+    wfo_strat_choice = wfo_col1.selectbox("WFO Strategy", ["moving_average", "rsi", "bollinger"], key="wfo_strat")
+    wfo_windows = wfo_col2.number_input("Windows", min_value=2, max_value=6, value=3, step=1, key="wfo_win")
+    wfo_mode = wfo_col3.selectbox("Window Mode", ["rolling", "expanding"], key="wfo_mode")
+    wfo_metric = wfo_col4.selectbox("Target Metric", ["sharpe_ratio", "profit_factor", "total_return"], key="wfo_metric")
+
+    if st.button("▶ Run Walk-Forward Optimization", key="run_wfo_btn"):
+        with st.spinner("Executing walk-forward forward testing..."):
+            try:
+                bars = load_bars_from_csv(data_path)
+                wfo_res = run_walk_forward_optimization(
+                    bars=bars,
+                    strategy_name=wfo_strat_choice,
+                    num_windows=int(wfo_windows),
+                    window_mode=wfo_mode,
+                    initial_cash=initial_cash,
+                    commission_rate=commission_rate,
+                    slippage_rate=slippage_rate,
+                    sizing_mode=sizing_mode,
+                    quantity_per_trade=float(quantity_per_trade),
+                    optimization_metric=wfo_metric,
+                )
+
+                if "ROBUST" in wfo_res.robustness_grade:
+                    eff_pct = f"{wfo_res.overall_efficiency:.1%}" if wfo_res.overall_efficiency is not None else "N/A"
+                    st.success(f"**Robustness Grade:** {wfo_res.robustness_grade} — WFE: {eff_pct}")
+                elif "MODERATE" in wfo_res.robustness_grade:
+                    eff_pct = f"{wfo_res.overall_efficiency:.1%}" if wfo_res.overall_efficiency is not None else "N/A"
+                    st.warning(f"**Robustness Grade:** {wfo_res.robustness_grade} — WFE: {eff_pct}")
+                else:
+                    eff_txt = f"{wfo_res.overall_efficiency:.1%}" if wfo_res.overall_efficiency is not None else "N/A"
+                    st.error(f"**Robustness Grade:** {wfo_res.robustness_grade} — WFE: {eff_txt}")
+
+                st.info(wfo_res.explanation)
+
+                if wfo_res.stitched_oos_metrics:
+                    m1, m2, m3, m4 = st.columns(4)
+                    m1.metric("Stitched OOS Return", f"{wfo_res.stitched_oos_metrics.total_return:.2%}")
+                    m2.metric("Stitched Total P&L", f"₹{wfo_res.stitched_oos_metrics.total_pnl:,.2f}")
+                    m3.metric("Stitched Max Drawdown", f"{wfo_res.stitched_oos_metrics.max_drawdown:.2%}")
+                    sharpe_val = f"{wfo_res.stitched_oos_metrics.sharpe_ratio:.2f}" if wfo_res.stitched_oos_metrics.sharpe_ratio is not None else "N/A"
+                    m4.metric("Stitched Sharpe", sharpe_val)
+
+                st.subheader("Stitched Out-of-Sample Cumulative Equity Curve")
+                st.line_chart(wfo_res.stitched_oos_equity_curve)
+
+                st.subheader("Walk-Forward Windows Breakdown")
+                table_data = [
+                    {
+                        "Window": f"#{w.window_index + 1}",
+                        "In-Sample Period": f"{w.in_sample_start.strftime('%Y-%m-%d')} → {w.in_sample_end.strftime('%Y-%m-%d')} ({w.in_sample_bars_count} bars)",
+                        "Optimal Parameters": str(w.best_parameters),
+                        "In-Sample Return": f"{w.in_sample_return:.2%}",
+                        "Out-of-Sample Period": f"{w.out_of_sample_start.strftime('%Y-%m-%d')} → {w.out_of_sample_end.strftime('%Y-%m-%d')} ({w.out_of_sample_bars_count} bars)",
+                        "Out-of-Sample Return": f"{w.out_of_sample_return:.2%}",
+                        "Window WFE": f"{w.efficiency_ratio:.1%}" if w.efficiency_ratio is not None else "N/A",
+                    }
+                    for w in wfo_res.windows
+                ]
+                st.dataframe(table_data, use_container_width=True, hide_index=True)
+
+            except (ValueError, TypeError, OSError) as error:
+                st.error(f"Walk-Forward Optimization failed: {error}")
+
+with analytics_tab_heatmap:
+    st.subheader("2D Parameter Surface & Stability Analysis")
+    st.write(
+        "Detect brittle curve-fitting spikes versus stable parameter plateaus across "
+        "combinations of Fast and Slow Moving Averages."
+    )
+    hm_col1, hm_col2 = st.columns(2)
+    fast_str = hm_col1.text_input("Fast MA Periods (comma-separated)", value="2, 5, 8, 10, 12, 15, 20", key="hm_fast")
+    slow_str = hm_col2.text_input("Slow MA Periods (comma-separated)", value="15, 20, 25, 30, 40, 50, 60", key="hm_slow")
+
+    if st.button("▶ Run Parameter Heatmap Analysis", key="run_hm_btn"):
+        with st.spinner("Evaluating parameter matrix..."):
+            try:
+                bars = load_bars_from_csv(data_path)
+                fast_periods = [int(x.strip()) for x in fast_str.split(",") if x.strip().isdigit() and int(x.strip()) > 0]
+                slow_periods = [int(x.strip()) for x in slow_str.split(",") if x.strip().isdigit() and int(x.strip()) > 0]
+                if not fast_periods or not slow_periods:
+                    st.error("Please enter at least one valid period for both Fast and Slow MA.")
+                else:
+                    hm_res = evaluate_parameter_grid_heatmap(
+                        bars=bars,
+                        fast_periods=fast_periods,
+                        slow_periods=slow_periods,
+                        initial_cash=initial_cash,
+                        commission_rate=commission_rate,
+                        slippage_rate=slippage_rate,
+                        sizing_mode=sizing_mode,
+                        quantity_per_trade=float(quantity_per_trade),
+                    )
+
+                    if "STABLE" in hm_res.stability_verdict:
+                        st.success(f"**Verdict:** {hm_res.stability_verdict} — Plateau Ratio: {hm_res.plateau_ratio:.1%}")
+                    else:
+                        st.warning(f"**Verdict:** {hm_res.stability_verdict} — Plateau Ratio: {hm_res.plateau_ratio:.1%}")
+
+                    hm_m1, hm_m2, hm_m3 = st.columns(3)
+                    hm_m1.metric("Total Combinations", hm_res.total_combinations)
+                    hm_m2.metric("Profitable Configurations", hm_res.profitable_combinations)
+                    hm_m3.metric("Plateau Ratio", f"{hm_res.plateau_ratio:.1%}")
+
+                    grid_rows = [
+                        {
+                            "Fast MA": pt.fast_period,
+                            "Slow MA": pt.slow_period,
+                            "Return (%)": f"{pt.total_return:.2%}",
+                            "Total P&L (₹)": f"₹{pt.total_pnl:,.2f}",
+                            "Sharpe": f"{pt.sharpe_ratio:.2f}" if pt.sharpe_ratio is not None else "N/A",
+                            "Max Drawdown (%)": f"{pt.max_drawdown:.2%}",
+                            "Trades": pt.trades_count,
+                            "Win Rate (%)": f"{pt.win_rate:.1%}" if pt.win_rate is not None else "N/A",
+                            "Profit Factor": f"{pt.profit_factor:.2f}" if pt.profit_factor is not None else "N/A",
+                            "Plateau Robust?": "YES (Cluster)" if pt.is_plateau else "NO (Isolated)",
+                        }
+                        for pt in hm_res.grid
+                    ]
+                    st.dataframe(grid_rows, use_container_width=True, hide_index=True)
+
+            except (ValueError, TypeError, OSError) as error:
+                st.error(f"Parameter Heatmap evaluation failed: {error}")
