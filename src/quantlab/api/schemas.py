@@ -512,3 +512,94 @@ class TearSheetResponse(BaseModel):
     monthly_matrix: list[MonthlyReturnRowDTO]
     underwater_curve: list[UnderwaterPointDTO]
 
+
+class AllocationWeightingEnum(str, Enum):
+    EQUAL_WEIGHT = "equal_weight"
+    INVERSE_VOLATILITY = "inverse_volatility"
+    CUSTOM = "custom"
+
+
+class RebalanceFrequencyEnum(str, Enum):
+    NONE = "none"
+    MONTHLY = "monthly"
+    QUARTERLY = "quarterly"
+
+
+class BasketTradeDTO(BaseModel):
+    timestamp: str
+    symbol: str
+    side: str
+    price: float
+    quantity: float
+    commission: float
+    reason: str
+
+
+class BasketEquityPointDTO(BaseModel):
+    timestamp: str
+    equity: float
+    cash: float
+    holdings_value: float
+    weights: dict[str, float]
+
+
+class BasketBacktestRequest(BaseModel):
+    datasets: list[str] = Field(
+        default_factory=lambda: ["reliance_daily.csv", "tcs_daily.csv"],
+        min_length=1,
+        description="List of dataset filenames in data/ folder.",
+    )
+    weighting: AllocationWeightingEnum = Field(
+        default=AllocationWeightingEnum.EQUAL_WEIGHT,
+        description="Portfolio weighting allocation scheme.",
+    )
+    custom_weights: dict[str, float] | None = Field(
+        default=None,
+        description="Custom target weights by symbol (required when weighting=custom).",
+    )
+    rebalance_freq: RebalanceFrequencyEnum = Field(
+        default=RebalanceFrequencyEnum.MONTHLY,
+        description="Periodic rebalancing frequency.",
+    )
+    initial_cash: float = Field(
+        default=100_000.0,
+        gt=0,
+        description="Initial portfolio cash amount.",
+    )
+    commission_rate: float = Field(
+        default=0.001,
+        ge=0.0,
+        le=0.05,
+        description="Commission rate per trade.",
+    )
+    slippage_rate: float = Field(
+        default=0.0005,
+        ge=0.0,
+        le=0.05,
+        description="Slippage rate applied to execution price.",
+    )
+    risk_free_rate: float = Field(
+        default=0.05,
+        ge=0.0,
+        le=0.20,
+        description="Annual risk-free rate for Sharpe and Sortino ratios.",
+    )
+
+
+class BasketBacktestResponse(BaseModel):
+    datasets: list[str]
+    symbols: list[str]
+    weighting: str
+    rebalance_freq: str
+    initial_cash: float
+    final_cash: float
+    final_equity: float
+    total_pnl: float
+    asset_weights: dict[str, float]
+    holdings: dict[str, float]
+    summary: MetricsDTO
+    tail_risk: TailRiskDTO
+    trades: list[BasketTradeDTO]
+    equity_points: list[BasketEquityPointDTO]
+
+

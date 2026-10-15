@@ -6,6 +6,7 @@ import {
   fetchHealth,
   saveExperiment,
 } from './api/client';
+import { BasketPanel } from './components/BasketPanel';
 import { ComparisonTable } from './components/ComparisonTable';
 import { ConfigPanel } from './components/ConfigPanel';
 import { EquityChart } from './components/EquityChart';
@@ -26,7 +27,7 @@ import type {
 } from './types';
 import './App.css';
 
-type ActiveTab = 'backtest' | 'tear-sheet' | 'walk-forward' | 'parameter-heatmap' | 'experiment-history';
+type ActiveTab = 'backtest' | 'tear-sheet' | 'portfolio-basket' | 'walk-forward' | 'parameter-heatmap' | 'experiment-history';
 
 export function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('backtest');
@@ -253,6 +254,13 @@ export function App() {
             </button>
             <button
               type="button"
+              className={`tab-btn ${activeTab === 'portfolio-basket' ? 'active' : ''}`}
+              onClick={() => setActiveTab('portfolio-basket')}
+            >
+              🧺 Multi-Asset Basket
+            </button>
+            <button
+              type="button"
               className={`tab-btn ${activeTab === 'walk-forward' ? 'active' : ''}`}
               onClick={() => setActiveTab('walk-forward')}
             >
@@ -401,6 +409,15 @@ export function App() {
               slippageRate={config.slippage_rate}
               sizingMode={config.sizing_mode}
               quantityPerTrade={config.quantity_per_trade}
+            />
+          )}
+
+          {activeTab === 'portfolio-basket' && (
+            <BasketPanel
+              datasets={datasets}
+              defaultInitialCash={config.initial_cash}
+              defaultCommissionRate={config.commission_rate}
+              defaultSlippageRate={config.slippage_rate}
             />
           )}
 

@@ -501,3 +501,83 @@ def test_tear_sheet_endpoint_nonexistent_dataset(client: TestClient):
     assert response.status_code == 404
 
 
+def test_basket_endpoint_equal_weight_success(client: TestClient):
+    payload = {
+        "datasets": ["reliance_daily.csv", "tcs_daily.csv"],
+        "weighting": "equal_weight",
+        "rebalance_freq": "monthly",
+        "initial_cash": 100000.0,
+        "commission_rate": 0.001,
+        "slippage_rate": 0.0005,
+    }
+    response = client.post("/api/v1/basket", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+
+    assert "RELIANCE" in data["symbols"]
+    assert "TCS" in data["symbols"]
+    assert data["weighting"] == "equal_weight"
+    assert data["rebalance_freq"] == "monthly"
+    assert data["initial_cash"] == 100000.0
+    assert data["final_equity"] > 0
+    assert "total_pnl" in data
+    assert data["asset_weights"]["RELIANCE"] == 0.5
+    assert data["asset_weights"]["TCS"] == 0.5
+
+    assert data["summary"]["total_pnl"] is not None
+    assert data["summary"]["cagr"] is not None
+    assert data["tail_risk"]["var_95_historical"] is not None
+    assert len(data["trades"]) >= 2
+    assert len(data["equity_points"]) > 0
+
+
+def test_basket_endpoint_inverse_volatility(client: TestClient):
+    payload = {
+        "datasets": ["reliance_daily.csv", "tcs_daily.csv"],
+        "weighting": "inverse_volatility",
+        "rebalance_freq": "none",
+        "initial_cash": 100000.0,
+    }
+    response = client.post("/api/v1/basket", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+
+    weights = data["asset_weights"]
+    assert abs(sum(weights.values()) - 1.0) < 1e-3
+
+
+def test_basket_endpoint_custom_weights(client: TestClient):
+    payload = {
+        "datasets": ["reliance_daily.csv", "tcs_daily.csv"],
+        "weighting": "custom",
+        "custom_weights": {"RELIANCE": 0.7, "TCS": 0.3},
+        "rebalance_freq": "monthly",
+        "initial_cash": 100000.0,
+    }
+    response = client.post("/api/v1/basket", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+
+    assert abs(data["asset_weights"]["RELIANCE"] - 0.7) < 1e-3
+    assert abs(data["asset_weights"]["TCS"] - 0.3) < 1e-3
+
+
+def test_basket_endpoint_missing_custom_weights(client: TestClient):
+    payload = {
+        "datasets": ["reliance_daily.csv", "tcs_daily.csv"],
+        "weighting": "custom",
+    }
+    response = client.post("/api/v1/basket", json=payload)
+    assert response.status_code == 400
+
+
+def test_basket_endpoint_missing_dataset(client: TestClient):
+    payload = {
+        "datasets": ["nonexistent.csv"],
+        "weighting": "equal_weight",
+    }
+    response = client.post("/api/v1/basket", json=payload)
+    assert response.status_code == 404
+
+
+

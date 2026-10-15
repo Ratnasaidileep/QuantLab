@@ -278,3 +278,53 @@ export interface TearSheetResponse {
   underwater_curve: UnderwaterPointDTO[];
 }
 
+export type AllocationWeighting = 'equal_weight' | 'inverse_volatility' | 'custom';
+export type RebalanceFrequency = 'none' | 'monthly' | 'quarterly';
+
+export interface BasketTradeDTO {
+  timestamp: string;
+  symbol: string;
+  side: 'buy' | 'sell';
+  price: number;
+  quantity: number;
+  commission: number;
+  reason: string;
+}
+
+export interface BasketEquityPointDTO {
+  timestamp: string;
+  equity: number;
+  cash: number;
+  holdings_value: number;
+  weights: Record<string, number>;
+}
+
+export interface BasketBacktestRequest {
+  datasets: string[];
+  weighting: AllocationWeighting;
+  custom_weights?: Record<string, number> | null;
+  rebalance_freq: RebalanceFrequency;
+  initial_cash: number;
+  commission_rate: number;
+  slippage_rate: number;
+  risk_free_rate?: number;
+}
+
+export interface BasketBacktestResponse {
+  datasets: string[];
+  symbols: string[];
+  weighting: string;
+  rebalance_freq: string;
+  initial_cash: number;
+  final_cash: number;
+  final_equity: number;
+  total_pnl: number;
+  asset_weights: Record<string, number>;
+  holdings: Record<string, number>;
+  summary: MetricsDTO;
+  tail_risk: TailRiskDTO;
+  trades: BasketTradeDTO[];
+  equity_points: BasketEquityPointDTO[];
+}
+
+

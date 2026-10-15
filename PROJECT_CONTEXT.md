@@ -238,24 +238,27 @@ This is the last known layout, not a guaranteed inventory of the current checkou
 - Historical CSV loading and validation
 - Moving Average Crossover strategy (level-based and crossover signals)
 - RSI strategy (Wilder's smoothing with stateful regimes)
+- Bollinger Bands Mean-Reversion strategy (volatility bands with stateful reversion exit)
 - Long-only backtesting engine with look-ahead bias prevention
 - Flexible position sizing (`unit`, `all_in`, `fixed_quantity`)
 - Portfolio and trade models with FIFO round-trip trade P&L matching
-- Performance & risk analytics: P&L, returns, max drawdown, win rate, profit factor, annualized Sharpe ratio ($R_f=5\%$), Sortino ratio, and CAGR
+- Performance & risk analytics: P&L, returns, max drawdown, win rate, profit factor, annualized Sharpe ratio ($R_f=5\%$), Sortino ratio, CAGR, and Calmar ratio
+- Walk-Forward Optimization (WFO) engine: rolling/expanding windows, Walk-Forward Efficiency (WFE), and robustness classification
+- 2D Parameter Surface & Stability Heatmap generator
+- Persistent experiment history (SQLite repository) with CRUD endpoints, UI panel, and Streamlit viewer
+- Quantitative Tear-Sheet & Tail-Risk Diagnostics: historical & parametric VaR (95%/99%), CVaR/Expected Shortfall (95%/99%), skewness, excess kurtosis, annualized volatility, tail ratio, calendar monthly return matrix, and underwater drawdown curves
+- Multi-Asset Basket & Portfolio Rebalancing Engine: Equal Weight ($1/N$), Inverse Volatility (Risk Parity), and Custom Target Weights with Next-Bar Open execution, monthly/quarterly rebalance friction, and mark-to-market daily equity curves
 - Unified strategy comparison and Buy & Hold benchmark accounting
-- Streamlit interactive prototype with sizing controls and metric scorecards
-- FastAPI REST backend (`/health`, `/datasets`, `/backtest`, `/compare`) with Pydantic validation, CORS middleware, and OpenAPI documentation
-- 111 automated tests passing with 100% clean Ruff linting
-- React, TypeScript, and Vite frontend dashboard with interactive parameter tuning, SVG equity curves, trade logs, and multi-strategy benchmark leaderboards
+- Streamlit interactive prototype with complete Advanced Quantitative Analytics suite
+- FastAPI REST backend (`/health`, `/datasets`, `/backtest`, `/basket`, `/compare`, `/analytics`, `/experiments`) with Pydantic validation, CORS middleware, and OpenAPI documentation
+- 166 automated tests passing with 100% clean Ruff linting
+- React, TypeScript, and Vite frontend dashboard with interactive parameter tuning, SVG equity curves, trade logs, and Multi-Asset Basket panel
 - GitHub repository
 
 **Not yet established as complete**
 
-- PostgreSQL persistence
+- PostgreSQL persistence (currently SQLite repository active)
 - User registration, login, and profile management
-- Production-ready dataset upload and storage
-- Saved experiments and persistent backtest history
-- Robust out-of-sample validation / Walk-Forward Optimization
 - Production deployment and containerization
 - Full end-to-end Cypress/Playwright testing
 

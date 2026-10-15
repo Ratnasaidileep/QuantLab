@@ -1,6 +1,8 @@
 import type {
   BacktestRequest,
   BacktestResponse,
+  BasketBacktestRequest,
+  BasketBacktestResponse,
   ComparisonResponse,
   DatasetInfo,
   DatasetUploadResponse,
@@ -298,4 +300,32 @@ export async function executeTearSheet(request: TearSheetRequest): Promise<TearS
 
   return response.json();
 }
+
+export async function executeBasketBacktest(
+  request: BasketBacktestRequest,
+): Promise<BasketBacktestResponse> {
+  const response = await fetch(`${API_BASE}/basket`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    let message = 'Basket portfolio backtest failed.';
+    if (errorData.detail) {
+      if (typeof errorData.detail === 'string') {
+        message = errorData.detail;
+      } else if (Array.isArray(errorData.detail)) {
+        message = errorData.detail.map((e: { msg?: string }) => e.msg || '').join('; ');
+      }
+    }
+    throw new Error(message);
+  }
+
+  return response.json();
+}
+
 

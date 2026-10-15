@@ -26,6 +26,11 @@ from quantlab.data.csv_loader import (
     load_bars_from_csv,
     save_bars_to_csv,
 )
+from quantlab.portfolio.basket import (
+    AllocationWeighting,
+    BasketBacktestEngine,
+    RebalanceFrequency,
+)
 from quantlab.storage.repository import (
     delete_experiment,
     get_experiment,
@@ -776,10 +781,11 @@ else:
 st.divider()
 st.header("Advanced Quantitative Analytics")
 
-analytics_tab_wfo, analytics_tab_heatmap, analytics_tab_tearsheet, analytics_tab_history = st.tabs([
+analytics_tab_wfo, analytics_tab_heatmap, analytics_tab_tearsheet, analytics_tab_basket, analytics_tab_history = st.tabs([
     "🔄 Walk-Forward Optimization (Out-of-Sample)",
     "🗺️ 2D Parameter Surface & Stability Heatmap",
     "📑 Quantitative Tear-Sheet & Tail-Risk Diagnostics",
+    "🧺 Multi-Asset Basket & Portfolio Rebalancing",
     "📁 Saved Experiments / Run History",
 ])
 
@@ -1043,6 +1049,175 @@ with analytics_tab_tearsheet:
 
             except (ValueError, TypeError, OSError) as error:
                 st.error(f"Tear-sheet generation failed: {error}")
+
+with analytics_tab_basket:
+    st.subheader("🧺 Multi-Asset Basket & Portfolio Rebalancing Engine")
+    st.write(
+        "Simultaneously simulate multi-asset portfolios across arbitrary asset collections. "
+        "Evaluate Equal Weight (1/N), Inverse Volatility (Risk Parity), and Custom Target Allocations "
+        "with next-bar open execution and monthly/quarterly rebalancing friction."
+    )
+
+    csv_files = [p.name for p in sorted(DATA_DIR.glob("*.csv"))]
+    selected_baskets = st.multiselect(
+        "Asset Universe (select 2 or more)",
+        options=csv_files,
+        default=csv_files[:2] if len(csv_files) >= 2 else csv_files,
+        key="basket_multiselect",
+    )
+
+    b_col1, b_col2, b_col3, b_col4 = st.columns(4)
+    weighting_scheme = b_col1.selectbox(
+        "Weighting Scheme",
+        ["Equal Weight (1/N)", "Inverse Volatility (Risk Parity)", "Custom Target Weights"],
+        key="basket_weighting_choice",
+    )
+    rebalance_schedule = b_col2.selectbox(
+        "Rebalance Schedule",
+        ["Monthly", "Quarterly", "Buy & Hold (None)"],
+        key="basket_rebalance_choice",
+    )
+    basket_cash = b_col3.number_input(
+        "Portfolio Cash (₹)",
+        min_value=1000.0,
+        value=100000.0,
+        step=10000.0,
+        key="basket_cash_input",
+    )
+    basket_comm = b_col4.number_input(
+        "Commission Rate",
+        min_value=0.0,
+        max_value=0.05,
+        value=0.001,
+        step=0.0005,
+        format="%.4f",
+        key="basket_comm_input",
+    )
+
+    custom_weights_dict: dict[str, float] = {}
+    if weighting_scheme == "Custom Target Weights" and selected_baskets:
+        st.write("**Specify Custom Target Allocations (%):**")
+        w_cols = st.columns(min(len(selected_baskets), 4))
+        for idx, fname in enumerate(selected_baskets):
+            sym = fname.replace("_daily.csv", "").replace(".csv", "").upper()
+            col = w_cols[idx % len(w_cols)]
+            default_val = round(100.0 / len(selected_baskets), 1)
+            custom_weights_dict[sym] = (
+                col.number_input(
+                    f"{sym} Weight (%)",
+                    min_value=0.0,
+                    max_value=100.0,
+                    value=default_val,
+                    step=5.0,
+                    key=f"cust_w_{sym}",
+                )
+                / 100.0
+            )
+
+    if st.button("▶ Run Basket Portfolio Simulation", key="run_basket_portfolio_btn"):
+        if not selected_baskets:
+            st.error("Please select at least one dataset for the portfolio basket.")
+        else:
+            with st.spinner("Simulating multi-asset portfolio with next-bar rebalancing..."):
+                try:
+                    bars_map = {}
+                    for fname in selected_baskets:
+                        fpath = DATA_DIR / fname
+                        bars = load_bars_from_csv(fpath)
+                        sym = fname.replace("_daily.csv", "").replace(".csv", "").upper()
+                        bars_map[sym] = bars
+
+                    # Map enums
+                    if weighting_scheme == "Equal Weight (1/N)":
+                        w_enum = AllocationWeighting.EQUAL_WEIGHT
+                    elif weighting_scheme == "Inverse Volatility (Risk Parity)":
+                        w_enum = AllocationWeighting.INVERSE_VOLATILITY
+                    else:
+                        w_enum = AllocationWeighting.CUSTOM
+
+                    if rebalance_schedule == "Monthly":
+                        r_enum = RebalanceFrequency.MONTHLY
+                    elif rebalance_schedule == "Quarterly":
+                        r_enum = RebalanceFrequency.QUARTERLY
+                    else:
+                        r_enum = RebalanceFrequency.NONE
+
+                    engine = BasketBacktestEngine(
+                        initial_cash=basket_cash,
+                        weighting=w_enum,
+                        custom_weights=custom_weights_dict if w_enum == AllocationWeighting.CUSTOM else None,
+                        rebalance_freq=r_enum,
+                        commission_rate=basket_comm,
+                        slippage_rate=slippage_rate,
+                    )
+
+                    basket_res = engine.run(bars_map)
+
+                    st.success("✅ Basket Simulation Complete!")
+
+                    # Summary metric cards
+                    sm1, sm2, sm3, sm4, sm5, sm6 = st.columns(6)
+                    sm1.metric("Total Return", f"{basket_res.metrics.total_return:.2%}")
+                    sm2.metric("Total P&L", f"₹{basket_res.total_pnl:,.2f}")
+                    cagr_str = f"{basket_res.metrics.cagr:.2%}" if basket_res.metrics.cagr is not None else "N/A"
+                    sm3.metric("CAGR", cagr_str)
+                    sm4.metric("Max Drawdown", f"{basket_res.metrics.max_drawdown:.2%}")
+                    sharpe_str = f"{basket_res.metrics.sharpe_ratio:.2f}" if basket_res.metrics.sharpe_ratio is not None else "N/A"
+                    sm5.metric("Sharpe Ratio", sharpe_str)
+                    sm6.metric("Total Trades", str(len(basket_res.trades)))
+
+                    # Asset Allocations & Holdings
+                    st.subheader("Target Allocations & Asset Breakdown")
+                    alloc_rows = [
+                        {
+                            "Symbol": sym,
+                            "Target Weight": f"{basket_res.asset_weights.get(sym, 0.0):.1%}",
+                            "Final Holdings": f"{basket_res.holdings.get(sym, 0.0):,.2f} units",
+                        }
+                        for sym in sorted(basket_res.asset_weights.keys())
+                    ]
+                    st.dataframe(alloc_rows, use_container_width=True, hide_index=True)
+
+                    # Tail Risk Metrics
+                    st.subheader("Tail Risk & Value-at-Risk (VaR)")
+                    tr1, tr2, tr3, tr4 = st.columns(4)
+                    v95 = f"{basket_res.tail_risk.var_95_historical:.2%}" if basket_res.tail_risk.var_95_historical is not None else "N/A"
+                    tr1.metric("95% Historical VaR", v95)
+                    v99 = f"{basket_res.tail_risk.var_99_historical:.2%}" if basket_res.tail_risk.var_99_historical is not None else "N/A"
+                    tr2.metric("99% Historical VaR", v99)
+                    cv95 = f"{basket_res.tail_risk.cvar_95:.2%}" if basket_res.tail_risk.cvar_95 is not None else "N/A"
+                    tr3.metric("95% CVaR (Expected Shortfall)", cv95)
+                    trato = f"{basket_res.tail_risk.tail_ratio:.2f}" if basket_res.tail_risk.tail_ratio is not None else "N/A"
+                    tr4.metric("Tail Ratio", trato)
+
+                    # Equity Chart
+                    st.subheader("Portfolio Equity Growth")
+                    eq_points = [
+                        {"timestamp": pt.timestamp, "Portfolio Equity": pt.equity, "Cash": pt.cash}
+                        for pt in basket_res.equity_points
+                    ]
+                    eq_df = pd.DataFrame(eq_points).set_index("timestamp")
+                    st.line_chart(eq_df["Portfolio Equity"])
+
+                    # Trades log
+                    if basket_res.trades:
+                        st.subheader(f"Executed Allocation & Rebalancing Orders ({len(basket_res.trades)})")
+                        trades_table = [
+                            {
+                                "Timestamp": t.timestamp.strftime("%Y-%m-%d"),
+                                "Symbol": t.symbol,
+                                "Side": t.side.value if hasattr(t.side, "value") else str(t.side),
+                                "Price": f"₹{t.price:,.2f}",
+                                "Quantity": f"{t.quantity:,.2f}",
+                                "Commission": f"₹{t.commission:,.2f}",
+                                "Reason": t.reason,
+                            }
+                            for t in basket_res.trades
+                        ]
+                        st.dataframe(trades_table, use_container_width=True, hide_index=True)
+
+                except (ValueError, TypeError, KeyError, OSError, RuntimeError) as e:
+                    st.error(f"Error during basket simulation: {e}")
 
 with analytics_tab_history:
     st.subheader("Persistent Experiment History (SQLite Repository)")
