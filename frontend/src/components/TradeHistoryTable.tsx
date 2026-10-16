@@ -36,6 +36,7 @@ export function TradeHistoryTable({ trades }: TradeHistoryTableProps) {
               <th>Price</th>
               <th>Quantity</th>
               <th>Commission</th>
+              <th>Trigger / Reason</th>
             </tr>
           </thead>
           <tbody>
@@ -50,6 +51,17 @@ export function TradeHistoryTable({ trades }: TradeHistoryTableProps) {
                 <td className="mono">{formatCurrency(trade.price)}</td>
                 <td className="mono">{trade.quantity.toFixed(1)}</td>
                 <td className="mono">{formatCurrency(trade.commission)}</td>
+                <td>
+                  {trade.side.toLowerCase() === 'buy' ? (
+                    <span style={{ color: 'var(--text-secondary, #94a3b8)', fontSize: '0.8rem' }}>Entry</span>
+                  ) : trade.exit_reason === 'stop_loss' ? (
+                    <span style={{ color: '#ef4444', fontWeight: 600, fontSize: '0.8rem' }}>🛑 Stop-Loss</span>
+                  ) : trade.exit_reason === 'take_profit' ? (
+                    <span style={{ color: '#10b981', fontWeight: 600, fontSize: '0.8rem' }}>🎯 Take-Profit</span>
+                  ) : (
+                    <span style={{ color: '#38bdf8', fontSize: '0.8rem' }}>📡 Strategy Signal</span>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>

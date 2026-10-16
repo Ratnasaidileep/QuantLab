@@ -416,6 +416,62 @@ export function ConfigPanel({
         </div>
       </div>
 
+      <div style={{ borderTop: '1px solid var(--border-color, #2a2e39)', paddingTop: '0.75rem', marginTop: '0.75rem', marginBottom: '0.75rem' }}>
+        <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--accent-color, #38bdf8)', display: 'block', marginBottom: '0.5rem' }}>
+          🛡️ Risk & Exit Management (Optional)
+        </span>
+        <div className="form-row">
+          <div className="form-group">
+            <label htmlFor="stop-loss">Stop-Loss (%)</label>
+            <input
+              id="stop-loss"
+              type="number"
+              step="0.5"
+              min="0.1"
+              max="50"
+              placeholder="e.g. 5"
+              value={config.stop_loss_pct ? config.stop_loss_pct * 100 : ''}
+              onChange={(e) => {
+                const val = e.target.value ? Number.parseFloat(e.target.value) / 100 : null;
+                updateField('stop_loss_pct', val);
+              }}
+            />
+          </div>
+          <div className="form-group">
+            <label htmlFor="take-profit">Take-Profit (%)</label>
+            <input
+              id="take-profit"
+              type="number"
+              step="0.5"
+              min="0.1"
+              max="100"
+              placeholder="e.g. 10"
+              value={config.take_profit_pct ? config.take_profit_pct * 100 : ''}
+              onChange={(e) => {
+                const val = e.target.value ? Number.parseFloat(e.target.value) / 100 : null;
+                updateField('take_profit_pct', val);
+              }}
+            />
+          </div>
+        </div>
+        <div className="form-group">
+          <label htmlFor="trailing-stop">Trailing Stop (%)</label>
+          <input
+            id="trailing-stop"
+            type="number"
+            step="0.5"
+            min="0.1"
+            max="50"
+            placeholder="e.g. 8"
+            value={config.trailing_stop_pct ? config.trailing_stop_pct * 100 : ''}
+            onChange={(e) => {
+              const val = e.target.value ? Number.parseFloat(e.target.value) / 100 : null;
+              updateField('trailing_stop_pct', val);
+            }}
+          />
+        </div>
+      </div>
+
       <div className="button-group">
         <button
           type="button"

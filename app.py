@@ -21,6 +21,7 @@ from quantlab.analytics.walk_forward import (
     run_walk_forward_optimization,
 )
 from quantlab.backtest.engine import Backtest
+from quantlab.backtest.models import TradeSide
 from quantlab.data.csv_loader import (
     fetch_ohlcv_from_yfinance,
     load_bars_from_csv,
@@ -250,6 +251,32 @@ slippage_rate = st.sidebar.number_input(
     format="%.4f",
 )
 
+with st.sidebar.expander("🛡️ Risk Management (Stop-Loss / Take-Profit)", expanded=False):
+    enable_sl = st.checkbox("Enable Stop-Loss", value=False, key="sb_enable_sl")
+    sl_pct = (
+        st.number_input("Stop-Loss (%)", min_value=0.1, max_value=50.0, value=5.0, step=0.5, key="sb_sl_pct")
+        if enable_sl
+        else None
+    )
+
+    enable_tp = st.checkbox("Enable Take-Profit", value=False, key="sb_enable_tp")
+    tp_pct = (
+        st.number_input("Take-Profit (%)", min_value=0.1, max_value=100.0, value=10.0, step=0.5, key="sb_tp_pct")
+        if enable_tp
+        else None
+    )
+
+    enable_trail = st.checkbox("Enable Trailing Stop", value=False, key="sb_enable_trail")
+    trail_pct = (
+        st.number_input("Trailing Stop (%)", min_value=0.1, max_value=50.0, value=8.0, step=0.5, key="sb_trail_pct")
+        if enable_trail
+        else None
+    )
+
+stop_loss_rate = (sl_pct / 100.0) if enable_sl and sl_pct else None
+take_profit_rate = (tp_pct / 100.0) if enable_tp and tp_pct else None
+trailing_stop_rate = (trail_pct / 100.0) if enable_trail and trail_pct else None
+
 run_backtest = st.sidebar.button(
     "▶ Run Backtest",
     use_container_width=True,
@@ -315,6 +342,9 @@ if run_backtest:
             use_crossover=use_crossover,
             sizing_mode=sizing_mode,
             quantity_per_trade=float(quantity_per_trade),
+            stop_loss_pct=stop_loss_rate,
+            take_profit_pct=take_profit_rate,
+            trailing_stop_pct=trailing_stop_rate,
         )
 
         result = backtest.run(bars)
@@ -598,6 +628,19 @@ if run_backtest:
             "Price": trade.price,
             "Quantity": trade.quantity,
             "Commission": trade.commission,
+            "Trigger / Reason": (
+                "ENTRY"
+                if trade.side == TradeSide.BUY
+                else (
+                    "🛑 STOP LOSS"
+                    if trade.exit_reason == "stop_loss"
+                    else (
+                        "🎯 TAKE PROFIT"
+                        if trade.exit_reason == "take_profit"
+                        else "📡 SIGNAL"
+                    )
+                )
+            ),
         }
         for trade in result.trades
     ]

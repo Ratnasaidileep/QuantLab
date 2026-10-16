@@ -60,6 +60,7 @@ class TradeDTO(BaseModel):
     price: float
     quantity: float
     commission: float
+    exit_reason: str | None = None
 
 
 class EquityPointDTO(BaseModel):
@@ -164,6 +165,24 @@ class BacktestRequest(BaseModel):
         default=1.0,
         gt=0.0,
         description="Quantity per trade for fixed_quantity mode.",
+    )
+    stop_loss_pct: float | None = Field(
+        default=None,
+        gt=0.0,
+        le=1.0,
+        description="Fixed stop-loss threshold as decimal (e.g. 0.05 for 5%).",
+    )
+    take_profit_pct: float | None = Field(
+        default=None,
+        gt=0.0,
+        le=10.0,
+        description="Take-profit threshold as decimal (e.g. 0.10 for 10%).",
+    )
+    trailing_stop_pct: float | None = Field(
+        default=None,
+        gt=0.0,
+        le=1.0,
+        description="Trailing stop-loss threshold as decimal.",
     )
 
     @model_validator(mode="after")

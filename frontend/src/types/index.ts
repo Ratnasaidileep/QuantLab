@@ -26,6 +26,7 @@ export interface TradeDTO {
   price: number;
   quantity: number;
   commission: number;
+  exit_reason?: string | null;
 }
 
 export interface EquityPointDTO {
@@ -64,6 +65,9 @@ export interface BacktestRequest {
   slippage_rate: number;
   sizing_mode: PositionSizingMode;
   quantity_per_trade: number;
+  stop_loss_pct?: number | null;
+  take_profit_pct?: number | null;
+  trailing_stop_pct?: number | null;
 }
 
 export interface BacktestResponse {

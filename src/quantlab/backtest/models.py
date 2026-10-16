@@ -17,3 +17,4 @@ class Trade:
     price: float
     quantity: float
     commission: float
+    exit_reason: str | None = None

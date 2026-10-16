@@ -177,6 +177,29 @@ def test_backtest_all_in_sizing(client: TestClient):
     assert first_trade["quantity"] > 1.0
 
 
+def test_backtest_with_stop_loss_and_take_profit(client: TestClient):
+    payload = {
+        "dataset": "reliance_daily.csv",
+        "strategy": "moving_average",
+        "fast_period": 10,
+        "slow_period": 30,
+        "initial_cash": 100000.0,
+        "stop_loss_pct": 0.03,
+        "take_profit_pct": 0.08,
+    }
+    response = client.post("/api/v1/backtest", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["strategy_name"] == "Moving Average Crossover"
+    assert len(data["trades"]) > 0
+    # Verify exit_reason field exists on trade objects
+    for trade in data["trades"]:
+        assert "exit_reason" in trade
+        if trade["side"] == "sell":
+            assert trade["exit_reason"] in ("signal", "stop_loss", "take_profit")
+
+
 def test_backtest_invalid_ma_parameters(client: TestClient):
     payload = {
         "dataset": "reliance_daily.csv",

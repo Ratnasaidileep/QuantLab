@@ -106,6 +106,9 @@ def run_backtest(request: BacktestRequest) -> BacktestResponse:
             use_crossover=use_crossover,
             sizing_mode=request.sizing_mode.value,
             quantity_per_trade=request.quantity_per_trade,
+            stop_loss_pct=request.stop_loss_pct,
+            take_profit_pct=request.take_profit_pct,
+            trailing_stop_pct=request.trailing_stop_pct,
         )
         result = backtest.run(bars)
     except Exception as error:
@@ -121,6 +124,7 @@ def run_backtest(request: BacktestRequest) -> BacktestResponse:
             price=trade.price,
             quantity=trade.quantity,
             commission=trade.commission,
+            exit_reason=trade.exit_reason,
         )
         for trade in result.trades
     ]
