@@ -95,19 +95,30 @@ with st.sidebar.expander("📥 Ingest Market Data (Upload / Fetch)"):
         except (ValueError, TypeError, OSError) as e:
             st.error(f"Upload error: {e}")
 
-    ticker_sym = st.text_input("Download Ticker (Yahoo)", placeholder="e.g. TCS.NS, AAPL", key="sb_ticker")
+    ticker_sym = st.text_input("Download Ticker (Yahoo)", placeholder="e.g. TCS.NS, AAPL, NVDA", key="sb_ticker")
     ticker_period = st.selectbox("Period", ["1y", "2y", "5y", "max"], index=1, key="sb_period")
     if st.button("Download Ticker Data", key="sb_fetch") and ticker_sym.strip():
-        with st.spinner(f"Downloading {ticker_sym.strip()}..."):
-            try:
-                bars = fetch_ohlcv_from_yfinance(ticker_sym.strip(), period=ticker_period)
-                safe_sym = re.sub(r"[^\w\-]", "_", ticker_sym.strip().upper()).lower()
-                target = DATA_DIR / f"{safe_sym}_daily.csv"
-                save_bars_to_csv(bars, target)
-                st.success(f"Downloaded {len(bars)} bars for {ticker_sym.strip()}!")
+        symbols = [s.strip().upper() for s in re.split(r"[\s,]+", ticker_sym.strip()) if s.strip()]
+        with st.spinner(f"Downloading {len(symbols)} symbol(s)..."):
+            success_count = 0
+            err_symbols = []
+            for sym in symbols:
+                try:
+                    bars = fetch_ohlcv_from_yfinance(sym, period=ticker_period)
+                    safe_sym = re.sub(r"[^\w\-]", "_", sym).lower()
+                    target = DATA_DIR / f"{safe_sym}_daily.csv"
+                    save_bars_to_csv(bars, target)
+                    success_count += 1
+                except (ValueError, TypeError, OSError) as e:
+                    err_symbols.append(f"{sym} ({e})")
+            if success_count > 0:
+                msg = f"Successfully downloaded {success_count} dataset(s)!"
+                if err_symbols:
+                    msg += f" Failed: {', '.join(err_symbols)}"
+                st.success(msg)
                 st.rerun()
-            except (ValueError, TypeError, OSError) as e:
-                st.error(f"Download failed: {e}")
+            else:
+                st.error(f"Download failed: {', '.join(err_symbols)}")
 
 st.sidebar.header("Backtest Configuration")
 

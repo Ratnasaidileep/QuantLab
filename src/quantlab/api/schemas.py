@@ -41,6 +41,30 @@ class DatasetUploadResponse(BaseModel):
     dataset: DatasetInfo
 
 
+class FailedSymbolDTO(BaseModel):
+    symbol: str
+    error: str
+
+
+class BatchFetchDatasetsRequest(BaseModel):
+    symbols: list[str] = Field(
+        ...,
+        min_length=1,
+        max_length=25,
+        description="List of ticker symbols to download in batch.",
+    )
+    period: str = Field(
+        default="2y",
+        description="Historical period to download (e.g. 6mo, 1y, 2y, 5y, max).",
+    )
+
+
+class BatchFetchDatasetsResponse(BaseModel):
+    message: str
+    datasets: list[DatasetInfo]
+    failed_symbols: list[FailedSymbolDTO] = Field(default_factory=list)
+
+
 class StrategyType(str, Enum):
     MOVING_AVERAGE = "moving_average"
     RSI = "rsi"

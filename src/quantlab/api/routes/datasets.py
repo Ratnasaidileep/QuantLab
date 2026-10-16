@@ -7,9 +7,12 @@ import pandas as pd
 from fastapi import APIRouter, HTTPException, UploadFile
 
 from quantlab.api.schemas import (
+    BatchFetchDatasetsRequest,
+    BatchFetchDatasetsResponse,
     DatasetInfo,
     DatasetListResponse,
     DatasetUploadResponse,
+    FailedSymbolDTO,
     FetchDatasetRequest,
 )
 from quantlab.config import settings
@@ -179,4 +182,55 @@ def fetch_dataset(request: FetchDatasetRequest) -> DatasetUploadResponse:
     return DatasetUploadResponse(
         message=f"Successfully downloaded and validated {len(bars)} market bars for {clean_symbol}.",
         dataset=info,
+    )
+
+
+@router.post("/fetch-batch", response_model=BatchFetchDatasetsResponse)
+def fetch_batch_datasets(
+    request: BatchFetchDatasetsRequest,
+) -> BatchFetchDatasetsResponse:
+    """Download multiple ticker datasets in batch from Yahoo Finance."""
+    successful: list[DatasetInfo] = []
+    failed: list[FailedSymbolDTO] = []
+
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+    for raw_symbol in request.symbols:
+        clean_symbol = raw_symbol.strip().upper()
+        if not clean_symbol:
+            continue
+        try:
+            bars = fetch_ohlcv_from_yfinance(clean_symbol, period=request.period)
+            safe_symbol = re.sub(r"[^\w\-]", "_", clean_symbol).lower()
+            filename = f"{safe_symbol}_daily.csv"
+            target_path = DATA_DIR / filename
+            save_bars_to_csv(bars, target_path)
+
+            info = DatasetInfo(
+                filename=filename,
+                symbol=clean_symbol,
+                bars_count=len(bars),
+                start_date=bars[0].timestamp.strftime("%Y-%m-%d"),
+                end_date=bars[-1].timestamp.strftime("%Y-%m-%d"),
+                file_size_bytes=target_path.stat().st_size,
+            )
+            successful.append(info)
+        except (ValueError, TypeError, OSError, RuntimeError, KeyError) as e:
+            logger.warning("Batch fetch failed for %s: %s", clean_symbol, e)
+            failed.append(FailedSymbolDTO(symbol=clean_symbol, error=str(e)))
+
+    if not successful and failed:
+        raise HTTPException(
+            status_code=400,
+            detail=f"All requested symbols failed to download: {[f.model_dump() for f in failed]}",
+        )
+
+    msg = f"Successfully downloaded {len(successful)} dataset(s)."
+    if failed:
+        msg += f" {len(failed)} symbol(s) could not be fetched."
+
+    return BatchFetchDatasetsResponse(
+        message=msg,
+        datasets=successful,
+        failed_symbols=failed,
     )

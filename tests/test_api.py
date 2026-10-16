@@ -450,6 +450,77 @@ def test_fetch_dataset_error(client: TestClient, monkeypatch):
     assert "could not download" in response.json()["detail"].lower()
 
 
+def test_fetch_batch_datasets_mocked(client: TestClient, monkeypatch):
+    from datetime import UTC, datetime
+    from pathlib import Path
+
+    from quantlab.data.models import Bar
+
+    fake_bars = [
+        Bar(timestamp=datetime(2026, 1, 1, tzinfo=UTC), open=100.0, high=105.0, low=98.0, close=102.0, volume=1000.0),
+        Bar(timestamp=datetime(2026, 1, 2, tzinfo=UTC), open=102.0, high=106.0, low=101.0, close=105.0, volume=1100.0),
+        Bar(timestamp=datetime(2026, 1, 3, tzinfo=UTC), open=105.0, high=108.0, low=103.0, close=107.0, volume=1200.0),
+        Bar(timestamp=datetime(2026, 1, 4, tzinfo=UTC), open=107.0, high=109.0, low=104.0, close=106.0, volume=1300.0),
+        Bar(timestamp=datetime(2026, 1, 5, tzinfo=UTC), open=106.0, high=110.0, low=105.0, close=109.0, volume=1400.0),
+    ]
+
+    def mock_fetch(symbol: str, period: str = "2y"):
+        return fake_bars
+
+    monkeypatch.setattr("quantlab.api.routes.datasets.fetch_ohlcv_from_yfinance", mock_fetch)
+
+    payload = {"symbols": ["TCS.NS", "INFY.NS"], "period": "1y"}
+    response = client.post("/api/v1/datasets/fetch-batch", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+
+    assert len(data["datasets"]) == 2
+    assert len(data["failed_symbols"]) == 0
+    assert "successfully downloaded 2" in data["message"].lower()
+
+    # Clean up created files
+    for ds in data["datasets"]:
+        p = Path("data") / ds["filename"]
+        if p.exists():
+            p.unlink(missing_ok=True)
+
+
+def test_fetch_batch_datasets_partial_failure(client: TestClient, monkeypatch):
+    from datetime import UTC, datetime
+    from pathlib import Path
+
+    from quantlab.data.models import Bar
+
+    fake_bars = [
+        Bar(timestamp=datetime(2026, 1, 1, tzinfo=UTC), open=100.0, high=105.0, low=98.0, close=102.0, volume=1000.0),
+        Bar(timestamp=datetime(2026, 1, 2, tzinfo=UTC), open=102.0, high=106.0, low=101.0, close=105.0, volume=1100.0),
+        Bar(timestamp=datetime(2026, 1, 3, tzinfo=UTC), open=105.0, high=108.0, low=103.0, close=107.0, volume=1200.0),
+        Bar(timestamp=datetime(2026, 1, 4, tzinfo=UTC), open=107.0, high=109.0, low=104.0, close=106.0, volume=1300.0),
+        Bar(timestamp=datetime(2026, 1, 5, tzinfo=UTC), open=106.0, high=110.0, low=105.0, close=109.0, volume=1400.0),
+    ]
+
+    def mock_fetch(symbol: str, period: str = "2y"):
+        if symbol == "FAIL":
+            raise ValueError("Invalid symbol")
+        return fake_bars
+
+    monkeypatch.setattr("quantlab.api.routes.datasets.fetch_ohlcv_from_yfinance", mock_fetch)
+
+    payload = {"symbols": ["GOOD_TICKER", "FAIL"], "period": "1y"}
+    response = client.post("/api/v1/datasets/fetch-batch", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+
+    assert len(data["datasets"]) == 1
+    assert len(data["failed_symbols"]) == 1
+    assert data["failed_symbols"][0]["symbol"] == "FAIL"
+
+    for ds in data["datasets"]:
+        p = Path("data") / ds["filename"]
+        if p.exists():
+            p.unlink(missing_ok=True)
+
+
 def test_experiment_endpoints_lifecycle(client: TestClient):
     payload = {
         "name": "Reliance Test Run",

@@ -421,6 +421,7 @@ export function App() {
               defaultInitialCash={config.initial_cash}
               defaultCommissionRate={config.commission_rate}
               defaultSlippageRate={config.slippage_rate}
+              onRefreshDatasets={handleRefreshDatasets}
             />
           )}
 

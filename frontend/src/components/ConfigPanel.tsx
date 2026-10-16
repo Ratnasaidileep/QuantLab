@@ -1,5 +1,5 @@
 import { type ChangeEvent, useState } from 'react';
-import { fetchDatasetFromAPI, uploadDataset } from '../api/client';
+import { fetchBatchDatasetsFromAPI, fetchDatasetFromAPI, uploadDataset } from '../api/client';
 import type { BacktestRequest, DatasetInfo, PositionSizingMode, StrategyType } from '../types';
 
 interface ConfigPanelProps {
@@ -41,10 +41,28 @@ export function ConfigPanel({
     setIsIngesting(true);
     setIngestFeedback(null);
     try {
-      const res = await fetchDatasetFromAPI(tickerInput.trim(), fetchPeriod);
-      setIngestFeedback({ type: 'success', msg: res.message });
-      await onRefreshDatasets();
-      updateField('dataset', res.dataset.filename);
+      const symbols = tickerInput
+        .split(/[\s,]+/)
+        .map((s) => s.trim().toUpperCase())
+        .filter(Boolean);
+
+      if (symbols.length > 1) {
+        const res = await fetchBatchDatasetsFromAPI(symbols, fetchPeriod);
+        const failText =
+          res.failed_symbols.length > 0
+            ? ` (${res.failed_symbols.map((f) => f.symbol).join(', ')} failed)`
+            : '';
+        setIngestFeedback({ type: 'success', msg: `${res.message}${failText}` });
+        await onRefreshDatasets();
+        if (res.datasets.length > 0) {
+          updateField('dataset', res.datasets[0].filename);
+        }
+      } else if (symbols.length === 1) {
+        const res = await fetchDatasetFromAPI(symbols[0], fetchPeriod);
+        setIngestFeedback({ type: 'success', msg: res.message });
+        await onRefreshDatasets();
+        updateField('dataset', res.dataset.filename);
+      }
       setTickerInput('');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to fetch ticker.';

@@ -20,6 +20,22 @@ export interface FetchDatasetRequest {
   period?: string;
 }
 
+export interface FailedSymbolDTO {
+  symbol: string;
+  error: string;
+}
+
+export interface BatchFetchDatasetsRequest {
+  symbols: string[];
+  period?: string;
+}
+
+export interface BatchFetchDatasetsResponse {
+  message: string;
+  datasets: DatasetInfo[];
+  failed_symbols: FailedSymbolDTO[];
+}
+
 export interface TradeDTO {
   timestamp: string;
   side: 'buy' | 'sell';

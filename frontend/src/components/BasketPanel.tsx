@@ -1,5 +1,5 @@
 import { type MouseEvent, useMemo, useState } from 'react';
-import { executeBasketBacktest } from '../api/client';
+import { executeBasketBacktest, fetchBatchDatasetsFromAPI } from '../api/client';
 import type {
   AllocationWeighting,
   BasketBacktestRequest,
@@ -13,6 +13,7 @@ interface BasketPanelProps {
   defaultInitialCash?: number;
   defaultCommissionRate?: number;
   defaultSlippageRate?: number;
+  onRefreshDatasets?: () => Promise<void>;
 }
 
 const CHART_WIDTH = 750;
@@ -35,6 +36,7 @@ export function BasketPanel({
   defaultInitialCash = 100_000,
   defaultCommissionRate = 0.001,
   defaultSlippageRate = 0.0005,
+  onRefreshDatasets,
 }: BasketPanelProps) {
   // Available dataset filenames
   const availableFiles = useMemo(() => {
@@ -61,6 +63,48 @@ export function BasketPanel({
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<BasketBacktestResponse | null>(null);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+
+  const [showBatchInput, setShowBatchInput] = useState<boolean>(false);
+  const [batchSymbolsInput, setBatchSymbolsInput] = useState<string>('');
+  const [batchPeriod, setBatchPeriod] = useState<string>('2y');
+  const [isBatchIngesting, setIsBatchIngesting] = useState<boolean>(false);
+  const [batchFeedback, setBatchFeedback] = useState<{
+    type: 'success' | 'error';
+    msg: string;
+  } | null>(null);
+
+  const handleBatchFetch = async () => {
+    const symbols = batchSymbolsInput
+      .split(/[\s,]+/)
+      .map((s) => s.trim().toUpperCase())
+      .filter(Boolean);
+    if (symbols.length === 0) return;
+
+    setIsBatchIngesting(true);
+    setBatchFeedback(null);
+    try {
+      const res = await fetchBatchDatasetsFromAPI(symbols, batchPeriod);
+      const failText =
+        res.failed_symbols.length > 0
+          ? ` (${res.failed_symbols.map((f) => f.symbol).join(', ')} failed)`
+          : '';
+      setBatchFeedback({
+        type: 'success',
+        msg: `${res.message}${failText}`,
+      });
+      if (onRefreshDatasets) {
+        await onRefreshDatasets();
+      }
+      const newFiles = res.datasets.map((d) => d.filename);
+      setSelectedDatasets((prev) => Array.from(new Set([...prev, ...newFiles])));
+      setBatchSymbolsInput('');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Batch download failed.';
+      setBatchFeedback({ type: 'error', msg });
+    } finally {
+      setIsBatchIngesting(false);
+    }
+  };
 
   // Toggle dataset selection
   const handleToggleDataset = (file: string) => {
@@ -238,9 +282,91 @@ export function BasketPanel({
 
         {/* 1. Multi-Asset Selector */}
         <div style={{ marginBottom: '1.25rem' }}>
-          <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.5rem' }}>
-            Select Asset Universe ({selectedDatasets.length} selected):
-          </label>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+            <label style={{ fontSize: '0.85rem', fontWeight: 600 }}>
+              Select Asset Universe ({selectedDatasets.length} selected):
+            </label>
+            <button
+              type="button"
+              onClick={() => setShowBatchInput(!showBatchInput)}
+              className="btn btn-secondary btn-sm"
+              style={{ fontSize: '0.78rem', padding: '0.2rem 0.6rem' }}
+            >
+              {showBatchInput ? '✕ Cancel' : '⚡ Batch Ingest Tickers'}
+            </button>
+          </div>
+
+          {showBatchInput && (
+            <div
+              style={{
+                background: 'var(--bg-secondary)',
+                padding: '0.75rem',
+                borderRadius: '6px',
+                border: '1px solid var(--border-color)',
+                marginBottom: '0.75rem',
+              }}
+            >
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <input
+                  type="text"
+                  placeholder="Enter symbols: e.g. TCS.NS, INFY.NS, RELIANCE.NS, HDFCBANK.NS"
+                  value={batchSymbolsInput}
+                  onChange={(e) => setBatchSymbolsInput(e.target.value)}
+                  disabled={isBatchIngesting}
+                  style={{
+                    flex: 1,
+                    padding: '0.4rem 0.6rem',
+                    borderRadius: '4px',
+                    border: '1px solid var(--border-color)',
+                    background: 'var(--bg-primary)',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.85rem',
+                  }}
+                />
+                <select
+                  value={batchPeriod}
+                  onChange={(e) => setBatchPeriod(e.target.value)}
+                  disabled={isBatchIngesting}
+                  style={{
+                    padding: '0.4rem',
+                    borderRadius: '4px',
+                    border: '1px solid var(--border-color)',
+                    background: 'var(--bg-primary)',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.85rem',
+                  }}
+                >
+                  <option value="1y">1y</option>
+                  <option value="2y">2y</option>
+                  <option value="5y">5y</option>
+                  <option value="max">max</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={handleBatchFetch}
+                  disabled={isBatchIngesting || !batchSymbolsInput.trim()}
+                  className="btn btn-primary btn-sm"
+                  style={{ whiteSpace: 'nowrap' }}
+                >
+                  {isBatchIngesting ? <span className="spinner"></span> : 'Download Basket'}
+                </button>
+              </div>
+              {batchFeedback && (
+                <div
+                  style={{
+                    marginTop: '0.5rem',
+                    fontSize: '0.8rem',
+                    color:
+                      batchFeedback.type === 'success'
+                        ? 'var(--color-success, #10b981)'
+                        : 'var(--color-danger, #ef4444)',
+                  }}
+                >
+                  {batchFeedback.msg}
+                </div>
+              )}
+            </div>
+          )}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
             {datasets.map((d) => {
               const isSelected = selectedDatasets.includes(d.filename);
