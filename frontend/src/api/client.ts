@@ -1,4 +1,5 @@
 import type {
+  AuthResponse,
   BacktestRequest,
   BacktestResponse,
   BasketBacktestRequest,
@@ -14,11 +15,38 @@ import type {
   SaveExperimentRequest,
   TearSheetRequest,
   TearSheetResponse,
+  UserDTO,
   WalkForwardRequest,
   WalkForwardResponse,
 } from '../types';
 
 const API_BASE = '/api/v1';
+const AUTH_TOKEN_KEY = 'quantlab_jwt_token';
+
+export function getStoredToken(): string | null {
+  try {
+    return localStorage.getItem(AUTH_TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setStoredToken(token: string | null): void {
+  try {
+    if (token) {
+      localStorage.setItem(AUTH_TOKEN_KEY, token);
+    } else {
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+    }
+  } catch {
+    // Ignore restricted localStorage
+  }
+}
+
+export function getAuthHeaders(): Record<string, string> {
+  const token = getStoredToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
 export async function fetchHealth(): Promise<{ status: string; app: string; version: string }> {
   const response = await fetch(`${API_BASE}/health`);
@@ -245,6 +273,7 @@ export async function saveExperiment(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      ...getAuthHeaders(),
     },
     body: JSON.stringify(request),
   });
@@ -274,7 +303,11 @@ export async function fetchExperiments(
   if (strategy) params.append('strategy', strategy);
 
   const query = params.toString() ? `?${params.toString()}` : '';
-  const response = await fetch(`${API_BASE}/experiments${query}`);
+  const response = await fetch(`${API_BASE}/experiments${query}`, {
+    headers: {
+      ...getAuthHeaders(),
+    },
+  });
 
   if (!response.ok) {
     throw new Error(`Failed to fetch experiments: ${response.statusText}`);
@@ -284,7 +317,11 @@ export async function fetchExperiments(
 }
 
 export async function fetchExperimentById(id: number): Promise<ExperimentDetailDTO> {
-  const response = await fetch(`${API_BASE}/experiments/${id}`);
+  const response = await fetch(`${API_BASE}/experiments/${id}`, {
+    headers: {
+      ...getAuthHeaders(),
+    },
+  });
 
   if (!response.ok) {
     throw new Error(`Failed to load experiment ${id}: ${response.statusText}`);
@@ -296,6 +333,9 @@ export async function fetchExperimentById(id: number): Promise<ExperimentDetailD
 export async function deleteExperiment(id: number): Promise<{ message: string; id: number }> {
   const response = await fetch(`${API_BASE}/experiments/${id}`, {
     method: 'DELETE',
+    headers: {
+      ...getAuthHeaders(),
+    },
   });
 
   if (!response.ok) {
@@ -303,6 +343,84 @@ export async function deleteExperiment(id: number): Promise<{ message: string; i
   }
 
   return response.json();
+}
+
+export async function registerUser(username: string, password: string): Promise<AuthResponse> {
+  const response = await fetch(`${API_BASE}/auth/register`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ username, password }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    let message = 'Registration failed.';
+    if (errorData.detail) {
+      if (typeof errorData.detail === 'string') {
+        message = errorData.detail;
+      } else if (Array.isArray(errorData.detail)) {
+        message = errorData.detail.map((e: { msg?: string }) => e.msg || '').join('; ');
+      }
+    }
+    throw new Error(message);
+  }
+
+  const data: AuthResponse = await response.json();
+  setStoredToken(data.access_token);
+  return data;
+}
+
+export async function loginUser(username: string, password: string): Promise<AuthResponse> {
+  const response = await fetch(`${API_BASE}/auth/login`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ username, password }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    let message = 'Invalid username or password.';
+    if (errorData.detail) {
+      if (typeof errorData.detail === 'string') {
+        message = errorData.detail;
+      } else if (Array.isArray(errorData.detail)) {
+        message = errorData.detail.map((e: { msg?: string }) => e.msg || '').join('; ');
+      }
+    }
+    throw new Error(message);
+  }
+
+  const data: AuthResponse = await response.json();
+  setStoredToken(data.access_token);
+  return data;
+}
+
+export async function fetchCurrentUser(): Promise<UserDTO> {
+  const token = getStoredToken();
+  if (!token) {
+    throw new Error('No authentication token found.');
+  }
+
+  const response = await fetch(`${API_BASE}/auth/me`, {
+    headers: {
+      ...getAuthHeaders(),
+    },
+  });
+
+  if (!response.ok) {
+    setStoredToken(null);
+    throw new Error('Authentication session expired.');
+  }
+
+  return response.json();
+}
+
+export function logoutUser(): void {
+  setStoredToken(null);
 }
 
 export async function executeTearSheet(request: TearSheetRequest): Promise<TearSheetResponse> {

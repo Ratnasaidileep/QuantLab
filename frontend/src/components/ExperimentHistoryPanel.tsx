@@ -1,15 +1,17 @@
 import { useEffect, useState } from 'react';
 import { deleteExperiment, fetchExperimentById, fetchExperiments } from '../api/client';
-import type { DatasetInfo, ExperimentDetailDTO, ExperimentSummaryDTO } from '../types';
+import type { DatasetInfo, ExperimentDetailDTO, ExperimentSummaryDTO, UserDTO } from '../types';
 
 interface ExperimentHistoryPanelProps {
   datasets: DatasetInfo[];
   onLoadExperiment: (experiment: ExperimentDetailDTO) => void;
+  currentUser?: UserDTO | null;
 }
 
 export function ExperimentHistoryPanel({
   datasets,
   onLoadExperiment,
+  currentUser,
 }: ExperimentHistoryPanelProps) {
   const [experiments, setExperiments] = useState<ExperimentSummaryDTO[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -62,7 +64,7 @@ export function ExperimentHistoryPanel({
     return () => {
       ignore = true;
     };
-  }, [selectedDataset, selectedStrategy]);
+  }, [selectedDataset, selectedStrategy, currentUser]);
 
   const handleLoad = async (id: number) => {
     setLoadingId(id);
@@ -103,7 +105,22 @@ export function ExperimentHistoryPanel({
     <div className="analytics-card">
       <div className="analytics-header">
         <div>
-          <h3>Saved Research Experiments & Run History</h3>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+            <h3>Saved Research Experiments & Run History</h3>
+            <span
+              style={{
+                fontSize: '0.75rem',
+                padding: '0.2rem 0.5rem',
+                borderRadius: '4px',
+                background: currentUser ? 'rgba(59, 130, 246, 0.15)' : 'rgba(148, 163, 184, 0.15)',
+                color: currentUser ? 'var(--color-primary, #60a5fa)' : 'var(--text-secondary, #94a3b8)',
+                border: '1px solid currentColor',
+                fontWeight: 600,
+              }}
+            >
+              {currentUser ? `🔒 Workspace: ${currentUser.username}` : '🌐 Guest Workspace'}
+            </span>
+          </div>
           <p className="analytics-subtitle">
             Permanent local database of historical simulations, parameters, and trade logs for reproducible research.
           </p>

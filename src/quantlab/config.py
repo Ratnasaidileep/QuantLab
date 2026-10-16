@@ -30,6 +30,16 @@ class Settings:
         default_factory=lambda: Path(os.getenv("QUANTLAB_DB_PATH", "data/quantlab.db"))
     )
     cors_origins: list[str] = field(default_factory=_default_cors_origins)
+    jwt_secret: str = field(
+        default_factory=lambda: os.getenv(
+            "QUANTLAB_JWT_SECRET",
+            "quantlab-insecure-dev-secret-key-32bytes-min-auth",
+        )
+    )
+    jwt_algorithm: str = "HS256"
+    jwt_expiration_hours: int = field(
+        default_factory=lambda: int(os.getenv("QUANTLAB_JWT_EXPIRATION_HOURS", "24"))
+    )
 
 
 settings = Settings()

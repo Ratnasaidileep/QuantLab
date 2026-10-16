@@ -1,7 +1,10 @@
-from typing import Any
+from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query, status
+from typing import Annotated, Any
 
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+
+from quantlab.api.dependencies import get_current_user_optional
 from quantlab.api.schemas import (
     EquityPointDTO,
     ExperimentDetailDTO,
@@ -11,6 +14,7 @@ from quantlab.api.schemas import (
     TradeDTO,
 )
 from quantlab.storage.repository import (
+    UserRecord,
     delete_experiment,
     get_experiment,
     list_experiments,
@@ -21,8 +25,11 @@ router = APIRouter(prefix="/experiments", tags=["Experiments"])
 
 
 @router.post("", response_model=ExperimentDetailDTO, status_code=status.HTTP_201_CREATED)
-def create_experiment(request: SaveExperimentRequest) -> ExperimentDetailDTO:
-    """Save a completed backtest run into persistent storage."""
+def create_experiment(
+    request: SaveExperimentRequest,
+    current_user: Annotated[UserRecord | None, Depends(get_current_user_optional)] = None,
+) -> ExperimentDetailDTO:
+    """Save a completed backtest run into persistent storage, scoping to current user if authenticated."""
     equity_curve_dicts = [pt.model_dump() for pt in request.equity_curve]
     trades_dicts = [tr.model_dump() for tr in request.trades]
 
@@ -50,6 +57,7 @@ def create_experiment(request: SaveExperimentRequest) -> ExperimentDetailDTO:
             cagr=request.cagr,
             equity_curve=equity_curve_dicts,
             trades=trades_dicts,
+            user_id=current_user.id if current_user else None,
         )
     except Exception as err:
         raise HTTPException(
@@ -82,6 +90,7 @@ def create_experiment(request: SaveExperimentRequest) -> ExperimentDetailDTO:
         cagr=record.cagr,
         equity_curve=[EquityPointDTO(**pt) for pt in record.equity_curve],
         trades=[TradeDTO(**tr) for tr in record.trades],
+        user_id=record.user_id,
     )
 
 
@@ -89,9 +98,14 @@ def create_experiment(request: SaveExperimentRequest) -> ExperimentDetailDTO:
 def get_all_experiments(
     dataset: str | None = Query(None, description="Filter by dataset filename"),
     strategy: str | None = Query(None, description="Filter by strategy name"),
+    current_user: Annotated[UserRecord | None, Depends(get_current_user_optional)] = None,
 ) -> ExperimentListResponse:
-    """List lightweight summaries of all saved experiments, ordered newest first."""
-    summaries = list_experiments(dataset=dataset, strategy=strategy)
+    """List lightweight summaries of saved experiments, scoped to current user workspace."""
+    summaries = list_experiments(
+        dataset=dataset,
+        strategy=strategy,
+        user_id=current_user.id if current_user else None,
+    )
     items = [
         ExperimentSummaryDTO(
             id=s.id,
@@ -112,6 +126,7 @@ def get_all_experiments(
             sharpe_ratio=s.sharpe_ratio,
             sortino_ratio=s.sortino_ratio,
             cagr=s.cagr,
+            user_id=s.user_id,
         )
         for s in summaries
     ]
@@ -119,9 +134,15 @@ def get_all_experiments(
 
 
 @router.get("/{experiment_id}", response_model=ExperimentDetailDTO)
-def get_single_experiment(experiment_id: int) -> ExperimentDetailDTO:
+def get_single_experiment(
+    experiment_id: int,
+    current_user: Annotated[UserRecord | None, Depends(get_current_user_optional)] = None,
+) -> ExperimentDetailDTO:
     """Retrieve full details of a saved experiment including its equity curve and trades."""
-    record = get_experiment(experiment_id)
+    record = get_experiment(
+        experiment_id,
+        user_id=current_user.id if current_user else None,
+    )
     if record is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -153,13 +174,20 @@ def get_single_experiment(experiment_id: int) -> ExperimentDetailDTO:
         cagr=record.cagr,
         equity_curve=[EquityPointDTO(**pt) for pt in record.equity_curve],
         trades=[TradeDTO(**tr) for tr in record.trades],
+        user_id=record.user_id,
     )
 
 
 @router.delete("/{experiment_id}")
-def remove_experiment(experiment_id: int) -> dict[str, Any]:
+def remove_experiment(
+    experiment_id: int,
+    current_user: Annotated[UserRecord | None, Depends(get_current_user_optional)] = None,
+) -> dict[str, Any]:
     """Delete a saved experiment from persistent storage."""
-    deleted = delete_experiment(experiment_id)
+    deleted = delete_experiment(
+        experiment_id,
+        user_id=current_user.id if current_user else None,
+    )
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

@@ -155,9 +155,9 @@ The small sample, limited asset coverage, and short historical period do not est
 
 ### 2.7 Testing history
 
-The project maintains comprehensive test coverage across data ingestion, strategy logic, friction accounting, performance metrics, benchmark comparisons, walk-forward out-of-sample optimization, and REST API endpoints.
+The project maintains comprehensive test coverage across data ingestion, strategy logic, friction accounting, performance metrics, benchmark comparisons, walk-forward out-of-sample optimization, intraday risk management, live market data ingestion, user authentication, and REST API endpoints.
 
-The full automated test suite reports **139 passing tests** with 0 failures and 0 ruff lint errors (`pytest -q` and `ruff check .`). The React frontend builds cleanly (`tsc -b && vite build`) and passes `npm run lint`.
+The full automated test suite reports **191 passing tests** with 0 failures and 0 ruff lint errors (`pytest -q` and `ruff check .`). The React frontend builds cleanly (`tsc -b && vite build`) and passes `npm run lint`.
 
 The project uses commands such as:
 
@@ -200,35 +200,51 @@ QuantLab/
 │       ├── analytics/
 │       │   ├── metrics.py
 │       │   ├── plotting.py
-│       │   └── strategy_comparison.py
+│       │   ├── strategy_comparison.py
+│       │   └── walk_forward.py
+│       ├── auth/
+│       │   ├── __init__.py
+│       │   └── security.py
 │       ├── backtest/
 │       │   ├── engine.py
 │       │   └── models.py
 │       ├── data/
 │       │   ├── csv_loader.py
 │       │   ├── models.py
-│       │   └── validation.py
+│       │   ├── validation.py
+│       │   └── yfinance_client.py
 │       ├── execution/
 │       ├── portfolio/
 │       │   ├── manager.py
 │       │   └── models.py
+│       ├── storage/
+│       │   └── repository.py
 │       └── strategy/
 │           ├── base.py
+│           ├── bollinger.py
+│           ├── macd.py
 │           ├── models.py
 │           ├── moving_average.py
 │           └── rsi.py
 ├── tests/
 │   ├── test_analytics.py
+│   ├── test_api.py
+│   ├── test_auth.py
 │   ├── test_backtest.py
+│   ├── test_basket.py
+│   ├── test_bollinger.py
 │   ├── test_data.py
+│   ├── test_macd.py
 │   ├── test_portfolio.py
+│   ├── test_risk_management.py
+│   ├── test_rsi.py
 │   ├── test_strategy.py
-│   └── test_rsi.py
+│   ├── test_tear_sheet.py
+│   ├── test_walk_forward.py
+│   └── test_yfinance.py
 └── frontend/
-    └── [Vite + React + TypeScript starter]
+    └── [Vite + React + TypeScript web application]
 ```
-
-This is the last known layout, not a guaranteed inventory of the current checkout. Inspect the actual repository.
 
 ### Current implementation status
 
@@ -239,6 +255,10 @@ This is the last known layout, not a guaranteed inventory of the current checkou
 - Moving Average Crossover strategy (level-based and crossover signals)
 - RSI strategy (Wilder's smoothing with stateful regimes)
 - Bollinger Bands Mean-Reversion strategy (volatility bands with stateful reversion exit)
+- MACD (Moving Average Convergence Divergence) strategy with EMA (12/26/9), MACD histogram, and crossover signals
+- Advanced Order Risk Management Engine: Intraday Stop-Loss, Take-Profit, and Trailing Stop-Loss with strict zero look-ahead bias, barrier priority resolution, gap-down protection, and trade exit reason tagging (`"signal"`, `"stop_loss"`, `"take_profit"`)
+- Live Market Data Multi-Symbol Batch Ingestion via Yahoo Finance API (`/datasets/fetch-batch`), auto-sanitization, CSV saving, Streamlit batch input, and React Basket batch ingestion
+- User Authentication & Isolated Workspaces: PBKDF2-HMAC-SHA256 password hashing, RFC 7519 HS256 JWT tokens, SQLite user isolation, private experiment management, and React Auth modal with token persistence
 - Long-only backtesting engine with look-ahead bias prevention
 - Flexible position sizing (`unit`, `all_in`, `fixed_quantity`)
 - Portfolio and trade models with FIFO round-trip trade P&L matching
@@ -250,8 +270,8 @@ This is the last known layout, not a guaranteed inventory of the current checkou
 - Multi-Asset Basket & Portfolio Rebalancing Engine: Equal Weight ($1/N$), Inverse Volatility (Risk Parity), and Custom Target Weights with Next-Bar Open execution, monthly/quarterly rebalance friction, and mark-to-market daily equity curves
 - Unified strategy comparison and Buy & Hold benchmark accounting
 - Streamlit interactive prototype with complete Advanced Quantitative Analytics suite
-- FastAPI REST backend (`/health`, `/datasets`, `/backtest`, `/basket`, `/compare`, `/analytics`, `/experiments`) with Pydantic validation, CORS middleware, and OpenAPI documentation
-- 166 automated tests passing with 100% clean Ruff linting
+- FastAPI REST backend (`/health`, `/auth`, `/datasets`, `/backtest`, `/basket`, `/compare`, `/analytics`, `/experiments`) with Pydantic validation, CORS middleware, and OpenAPI documentation
+- 191 automated tests passing with 100% clean Ruff linting
 - React, TypeScript, and Vite frontend dashboard with interactive parameter tuning, SVG equity curves, trade logs, and Multi-Asset Basket panel
 - GitHub repository
 

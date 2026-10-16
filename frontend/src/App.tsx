@@ -2,10 +2,14 @@ import { useEffect, useState } from 'react';
 import {
   executeBacktest,
   executeComparison,
+  fetchCurrentUser,
   fetchDatasets,
   fetchHealth,
+  getStoredToken,
+  logoutUser,
   saveExperiment,
 } from './api/client';
+import { AuthModal } from './components/AuthModal';
 import { BasketPanel } from './components/BasketPanel';
 import { ComparisonTable } from './components/ComparisonTable';
 import { ConfigPanel } from './components/ConfigPanel';
@@ -24,6 +28,7 @@ import type {
   ComparisonResponse,
   DatasetInfo,
   ExperimentDetailDTO,
+  UserDTO,
 } from './types';
 import './App.css';
 
@@ -61,6 +66,9 @@ export function App() {
   const [isComparing, setIsComparing] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  const [currentUser, setCurrentUser] = useState<UserDTO | null>(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
+
   useEffect(() => {
     async function init() {
       try {
@@ -69,6 +77,15 @@ export function App() {
         setApiVersion(health.version);
       } catch {
         setApiStatus('offline');
+      }
+
+      if (getStoredToken()) {
+        try {
+          const user = await fetchCurrentUser();
+          setCurrentUser(user);
+        } catch {
+          // Token expired or invalid, silently cleared
+        }
       }
 
       try {
@@ -216,9 +233,25 @@ export function App() {
     setActiveTab('backtest');
   };
 
+  const handleAuthSuccess = (user: UserDTO) => {
+    setCurrentUser(user);
+    setIsAuthModalOpen(false);
+  };
+
+  const handleLogout = () => {
+    logoutUser();
+    setCurrentUser(null);
+  };
+
   return (
     <div className="quantlab-app">
-      <Navbar apiStatus={apiStatus} apiVersion={apiVersion} />
+      <Navbar
+        apiStatus={apiStatus}
+        apiVersion={apiVersion}
+        currentUser={currentUser}
+        onOpenAuth={() => setIsAuthModalOpen(true)}
+        onLogout={handleLogout}
+      />
 
       <main className="main-layout">
         <ConfigPanel
@@ -451,12 +484,19 @@ export function App() {
             <ExperimentHistoryPanel
               datasets={datasets}
               onLoadExperiment={handleLoadExperiment}
+              currentUser={currentUser}
             />
           )}
 
           <ResearchNotice />
         </section>
       </main>
+
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onAuthSuccess={handleAuthSuccess}
+      />
     </div>
   );
 }

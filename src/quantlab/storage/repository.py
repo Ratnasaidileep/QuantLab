@@ -11,6 +11,13 @@ DEFAULT_DB_PATH = settings.db_path
 
 
 @dataclass(frozen=True)
+class UserRecord:
+    id: int
+    username: str
+    created_at: str
+
+
+@dataclass(frozen=True)
 class ExperimentSummary:
     id: int
     name: str
@@ -30,6 +37,7 @@ class ExperimentSummary:
     sharpe_ratio: float | None = None
     sortino_ratio: float | None = None
     cagr: float | None = None
+    user_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -58,6 +66,7 @@ class ExperimentRecord:
     cagr: float | None
     equity_curve: list[dict[str, Any]] = field(default_factory=list)
     trades: list[dict[str, Any]] = field(default_factory=list)
+    user_id: int | None = None
 
 
 def get_connection(db_path: Path | str | None = None) -> sqlite3.Connection:
@@ -75,6 +84,21 @@ def get_connection(db_path: Path | str | None = None) -> sqlite3.Connection:
 def init_db(conn: sqlite3.Connection) -> None:
     """Initialize database tables and indexes if they do not exist."""
     with conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                salt TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);"
+        )
+
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS experiments (
@@ -101,10 +125,18 @@ def init_db(conn: sqlite3.Connection) -> None:
                 sortino_ratio REAL,
                 cagr REAL,
                 equity_curve_json TEXT NOT NULL,
-                trades_json TEXT NOT NULL
+                trades_json TEXT NOT NULL,
+                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE
             );
             """
         )
+        # Migrate existing tables if user_id column is missing
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(experiments);").fetchall()]
+        if "user_id" not in cols:
+            conn.execute(
+                "ALTER TABLE experiments ADD COLUMN user_id INTEGER REFERENCES users(id) ON DELETE CASCADE;"
+            )
+
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_experiments_created_at ON experiments(created_at DESC);"
         )
@@ -113,6 +145,9 @@ def init_db(conn: sqlite3.Connection) -> None:
         )
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_experiments_strategy ON experiments(strategy);"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_experiments_user_id ON experiments(user_id);"
         )
 
 
@@ -140,6 +175,7 @@ def save_experiment(
     trades: list[dict[str, Any]],
     notes: str = "",
     created_at: str | None = None,
+    user_id: int | None = None,
     db_path: Path | str | None = None,
 ) -> ExperimentRecord:
     """Persist a completed backtest run as an experiment."""
@@ -154,8 +190,8 @@ def save_experiment(
                     initial_cash, commission_rate, slippage_rate, sizing_mode, quantity_per_trade,
                     final_equity, total_pnl, total_return, max_drawdown, total_trades,
                     win_rate, profit_factor, sharpe_ratio, sortino_ratio, cagr,
-                    equity_curve_json, trades_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                    equity_curve_json, trades_json, user_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
                 """,
                 (
                     name.strip(),
@@ -181,6 +217,7 @@ def save_experiment(
                     cagr,
                     json.dumps(equity_curve),
                     json.dumps(trades),
+                    user_id,
                 ),
             )
             experiment_id = cursor.lastrowid
@@ -212,6 +249,7 @@ def save_experiment(
             cagr=cagr,
             equity_curve=equity_curve,
             trades=trades,
+            user_id=user_id,
         )
     finally:
         conn.close()
@@ -220,6 +258,7 @@ def save_experiment(
 def list_experiments(
     dataset: str | None = None,
     strategy: str | None = None,
+    user_id: int | None = None,
     db_path: Path | str | None = None,
 ) -> list[ExperimentSummary]:
     """Retrieve lightweight summaries of saved experiments ordered newest first."""
@@ -228,7 +267,7 @@ def list_experiments(
         query = """
             SELECT id, name, notes, created_at, dataset, strategy, parameters_json,
                    initial_cash, final_equity, total_pnl, total_return, max_drawdown,
-                   total_trades, win_rate, profit_factor, sharpe_ratio, sortino_ratio, cagr
+                   total_trades, win_rate, profit_factor, sharpe_ratio, sortino_ratio, cagr, user_id
             FROM experiments
         """
         conditions: list[str] = []
@@ -240,6 +279,9 @@ def list_experiments(
         if strategy:
             conditions.append("strategy = ?")
             params.append(strategy)
+        if user_id is not None:
+            conditions.append("user_id = ?")
+            params.append(user_id)
 
         if conditions:
             query += " WHERE " + " AND ".join(conditions)
@@ -269,6 +311,7 @@ def list_experiments(
                     sharpe_ratio=r["sharpe_ratio"],
                     sortino_ratio=r["sortino_ratio"],
                     cagr=r["cagr"],
+                    user_id=r["user_id"],
                 )
             )
         return summaries
@@ -278,17 +321,19 @@ def list_experiments(
 
 def get_experiment(
     experiment_id: int,
+    user_id: int | None = None,
     db_path: Path | str | None = None,
 ) -> ExperimentRecord | None:
-    """Retrieve full details of an experiment by ID, including equity curve and trades."""
+    """Retrieve full details of an experiment by ID, with optional user workspace isolation."""
     conn = get_connection(db_path)
     try:
-        row = conn.execute(
-            """
-            SELECT * FROM experiments WHERE id = ?;
-            """,
-            (experiment_id,),
-        ).fetchone()
+        query = "SELECT * FROM experiments WHERE id = ?"
+        params: list[Any] = [experiment_id]
+        if user_id is not None:
+            query += " AND (user_id = ? OR user_id IS NULL)"
+            params.append(user_id)
+
+        row = conn.execute(query, params).fetchone()
 
         if row is None:
             return None
@@ -318,6 +363,7 @@ def get_experiment(
             cagr=row["cagr"],
             equity_curve=json.loads(row["equity_curve_json"]),
             trades=json.loads(row["trades_json"]),
+            user_id=row["user_id"],
         )
     finally:
         conn.close()
@@ -325,16 +371,93 @@ def get_experiment(
 
 def delete_experiment(
     experiment_id: int,
+    user_id: int | None = None,
     db_path: Path | str | None = None,
 ) -> bool:
-    """Delete an experiment by ID. Returns True if row was deleted, False otherwise."""
+    """Delete an experiment by ID, with optional user workspace isolation."""
+    conn = get_connection(db_path)
+    try:
+        with conn:
+            query = "DELETE FROM experiments WHERE id = ?"
+            params: list[Any] = [experiment_id]
+            if user_id is not None:
+                query += " AND user_id = ?"
+                params.append(user_id)
+            cursor = conn.execute(query, params)
+            return cursor.rowcount > 0
+    finally:
+        conn.close()
+
+
+def create_user(
+    username: str,
+    password_hash: str,
+    salt: str,
+    created_at: str | None = None,
+    db_path: Path | str | None = None,
+) -> UserRecord:
+    """Create a new user account with hashed credentials."""
+    clean_username = username.strip().lower()
+    if len(clean_username) < 3:
+        raise ValueError("Username must be at least 3 characters long.")
+
+    now_iso = created_at or datetime.now(UTC).isoformat()
     conn = get_connection(db_path)
     try:
         with conn:
             cursor = conn.execute(
-                "DELETE FROM experiments WHERE id = ?;",
-                (experiment_id,),
+                """
+                INSERT INTO users (username, password_hash, salt, created_at)
+                VALUES (?, ?, ?, ?);
+                """,
+                (clean_username, password_hash, salt, now_iso),
             )
-            return cursor.rowcount > 0
+            user_id = cursor.lastrowid
+            if user_id is None:
+                raise RuntimeError("Failed to obtain ID for created user.")
+            return UserRecord(id=user_id, username=clean_username, created_at=now_iso)
+    except sqlite3.IntegrityError as err:
+        raise ValueError(f"Username '{clean_username}' already exists.") from err
     finally:
         conn.close()
+
+
+def get_user_by_username(
+    username: str,
+    db_path: Path | str | None = None,
+) -> tuple[UserRecord, str, str] | None:
+    """Retrieve user record, password_hash, and salt by username."""
+    conn = get_connection(db_path)
+    try:
+        row = conn.execute(
+            "SELECT id, username, password_hash, salt, created_at FROM users WHERE username = ?;",
+            (username.strip().lower(),),
+        ).fetchone()
+        if row is None:
+            return None
+        return (
+            UserRecord(id=row["id"], username=row["username"], created_at=row["created_at"]),
+            row["password_hash"],
+            row["salt"],
+        )
+    finally:
+        conn.close()
+
+
+def get_user_by_id(
+    user_id: int,
+    db_path: Path | str | None = None,
+) -> UserRecord | None:
+    """Retrieve user record by user ID."""
+    conn = get_connection(db_path)
+    try:
+        row = conn.execute(
+            "SELECT id, username, created_at FROM users WHERE id = ?;",
+            (user_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        return UserRecord(id=row["id"], username=row["username"], created_at=row["created_at"])
+    finally:
+        conn.close()
+

@@ -536,6 +536,7 @@ class ExperimentSummaryDTO(BaseModel):
     sortino_ratio: float | None = None
     cagr: float | None = None
     calmar_ratio: float | None = None
+    user_id: int | None = None
 
 
 class ExperimentDetailDTO(ExperimentSummaryDTO):
@@ -683,5 +684,27 @@ class BasketBacktestResponse(BaseModel):
     tail_risk: TailRiskDTO
     trades: list[BasketTradeDTO]
     equity_points: list[BasketEquityPointDTO]
+
+
+class UserDTO(BaseModel):
+    id: int
+    username: str
+    created_at: str
+
+
+class RegisterRequest(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50, description="Unique username")
+    password: str = Field(..., min_length=6, max_length=128, description="User password (min 6 chars)")
+
+
+class LoginRequest(BaseModel):
+    username: str = Field(..., description="Registered username")
+    password: str = Field(..., description="User password")
+
+
+class AuthResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserDTO
 
 

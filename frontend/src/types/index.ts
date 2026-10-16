@@ -242,6 +242,7 @@ export interface ExperimentSummaryDTO {
   sortino_ratio: number | null;
   cagr: number | null;
   calmar_ratio: number | null;
+  user_id?: number | null;
 }
 
 export interface ExperimentDetailDTO extends ExperimentSummaryDTO {
@@ -348,6 +349,28 @@ export interface BasketBacktestResponse {
   tail_risk: TailRiskDTO;
   trades: BasketTradeDTO[];
   equity_points: BasketEquityPointDTO[];
+}
+
+export interface UserDTO {
+  id: number;
+  username: string;
+  created_at: string;
+}
+
+export interface AuthResponse {
+  access_token: string;
+  token_type: string;
+  user: UserDTO;
+}
+
+export interface LoginRequest {
+  username: string;
+  password: string;
+}
+
+export interface RegisterRequest {
+  username: string;
+  password: string;
 }
 
 
