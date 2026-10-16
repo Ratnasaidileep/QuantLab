@@ -18,6 +18,7 @@ from quantlab.analytics.plotting import plot_backtest_results
 from quantlab.analytics.strategy_comparison import (
     compare_bollinger_bands_strategies,
     compare_buy_and_hold,
+    compare_macd_strategies,
     compare_moving_average_strategies,
     compare_strategies,
 )
@@ -771,5 +772,41 @@ def test_compare_bollinger_bands_strategies_and_combined():
     assert len(combined) == 3
     names = [r.strategy_name for r in combined]
     assert names == ["Moving Average Crossover", "RSI", "Bollinger Bands"]
+
+
+def test_compare_macd_strategies_unification():
+    bars = [
+        make_bar(10.0, 0),
+        make_bar(11.0, 1),
+        make_bar(12.0, 2),
+        make_bar(14.0, 3),
+        make_bar(18.0, 4),
+        make_bar(22.0, 5),
+        make_bar(20.0, 6),
+        make_bar(15.0, 7),
+    ]
+
+    macd_results = compare_macd_strategies(
+        bars=bars,
+        initial_cash=10_000.0,
+        parameter_triplets=[(2, 4, 2)],
+    )
+
+    assert len(macd_results) == 1
+    assert macd_results[0].strategy_name == "MACD"
+    assert "Fast 2 / Slow 4 / Signal 2" in macd_results[0].configuration
+
+    combined = compare_strategies(
+        bars=bars,
+        initial_cash=10_000.0,
+        ma_parameter_pairs=[(2, 3)],
+        rsi_configurations=[(3, 30.0, 70.0)],
+        bb_configurations=[(3, 1.5)],
+        macd_configurations=[(2, 4, 2)],
+    )
+
+    assert len(combined) == 4
+    names = [r.strategy_name for r in combined]
+    assert names == ["Moving Average Crossover", "RSI", "Bollinger Bands", "MACD"]
 
 

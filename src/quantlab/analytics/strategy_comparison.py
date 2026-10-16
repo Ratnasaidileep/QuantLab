@@ -10,6 +10,7 @@ from quantlab.backtest.models import Trade, TradeSide
 from quantlab.data.models import Bar
 from quantlab.data.validation import validate_bar
 from quantlab.strategy.bollinger import BollingerBandsStrategy
+from quantlab.strategy.macd import MACDStrategy
 from quantlab.strategy.moving_average import MovingAverageCrossover
 from quantlab.strategy.rsi import RSIStrategy
 
@@ -171,6 +172,58 @@ def compare_bollinger_bands_strategies(
     return results
 
 
+def compare_macd_strategies(
+    bars: Sequence[Bar],
+    initial_cash: float,
+    parameter_triplets: Sequence[tuple[int, int, int]],
+    commission_rate: float = 0.0,
+    slippage_rate: float = 0.0,
+    use_crossover: bool = True,
+    sizing_mode: str = "unit",
+    quantity_per_trade: float = 1.0,
+) -> list[StrategyComparisonResult]:
+    """Compare multiple MACD configurations under identical market conditions."""
+    results: list[StrategyComparisonResult] = []
+
+    for fast_period, slow_period, signal_period in parameter_triplets:
+        strategy = MACDStrategy(
+            fast_period=fast_period,
+            slow_period=slow_period,
+            signal_period=signal_period,
+        )
+
+        backtest = Backtest(
+            initial_cash=initial_cash,
+            strategy=strategy,
+            commission_rate=commission_rate,
+            slippage_rate=slippage_rate,
+            use_crossover=use_crossover,
+            sizing_mode=sizing_mode,
+            quantity_per_trade=quantity_per_trade,
+        )
+
+        result = backtest.run(bars)
+
+        params: dict[str, Any] = {
+            "fast_period": fast_period,
+            "slow_period": slow_period,
+            "signal_period": signal_period,
+        }
+        if sizing_mode != "unit":
+            params["sizing_mode"] = sizing_mode
+
+        results.append(
+            _build_result(
+                strategy_name="MACD",
+                configuration=f"Fast {fast_period} / Slow {slow_period} / Signal {signal_period}",
+                result=result,
+                parameters=params,
+            )
+        )
+
+    return results
+
+
 def compare_strategies(
     bars: Sequence[Bar],
     initial_cash: float,
@@ -181,10 +234,11 @@ def compare_strategies(
         (14, 30.0, 70.0),
     ),
     bb_configurations: Sequence[tuple[int, float]] | None = None,
+    macd_configurations: Sequence[tuple[int, int, int]] | None = None,
     sizing_mode: str = "unit",
     quantity_per_trade: float = 1.0,
 ) -> list[StrategyComparisonResult]:
-    """Compare moving-average, RSI, and Bollinger Bands configurations under the same costs."""
+    """Compare moving-average, RSI, Bollinger Bands, and MACD configurations under the same costs."""
     results = compare_moving_average_strategies(
         bars=bars,
         initial_cash=initial_cash,
@@ -246,6 +300,18 @@ def compare_strategies(
             quantity_per_trade=quantity_per_trade,
         )
         results.extend(bb_results)
+
+    if macd_configurations:
+        macd_results = compare_macd_strategies(
+            bars=bars,
+            initial_cash=initial_cash,
+            parameter_triplets=macd_configurations,
+            commission_rate=commission_rate,
+            slippage_rate=slippage_rate,
+            sizing_mode=sizing_mode,
+            quantity_per_trade=quantity_per_trade,
+        )
+        results.extend(macd_results)
 
     return results
 

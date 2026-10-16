@@ -54,6 +54,7 @@ def compare_strategy_configurations(request: ComparisonRequest) -> ComparisonRes
             ma_parameter_pairs=request.ma_parameter_pairs,
             rsi_configurations=request.rsi_configurations,
             bb_configurations=request.bb_configurations,
+            macd_configurations=request.macd_configurations,
             sizing_mode=request.sizing_mode.value,
             quantity_per_trade=request.quantity_per_trade,
         )

@@ -14,6 +14,7 @@ from quantlab.backtest.engine import Backtest
 from quantlab.config import settings
 from quantlab.data.csv_loader import load_bars_from_csv
 from quantlab.strategy.bollinger import BollingerBandsStrategy
+from quantlab.strategy.macd import MACDStrategy
 from quantlab.strategy.moving_average import MovingAverageCrossover
 from quantlab.strategy.rsi import RSIStrategy
 
@@ -78,6 +79,17 @@ def run_backtest(request: BacktestRequest) -> BacktestResponse:
         strategy_name = "Bollinger Bands"
         configuration = (
             f"Period {request.bb_period} / StdDev {request.bb_std_dev:g}"
+        )
+    elif request.strategy == StrategyType.MACD:
+        strategy = MACDStrategy(
+            fast_period=request.macd_fast,
+            slow_period=request.macd_slow,
+            signal_period=request.macd_signal,
+        )
+        use_crossover = True
+        strategy_name = "MACD"
+        configuration = (
+            f"Fast {request.macd_fast} / Slow {request.macd_slow} / Signal {request.macd_signal}"
         )
     else:
         raise HTTPException(

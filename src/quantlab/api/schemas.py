@@ -45,6 +45,7 @@ class StrategyType(str, Enum):
     MOVING_AVERAGE = "moving_average"
     RSI = "rsi"
     BOLLINGER = "bollinger"
+    MACD = "macd"
 
 
 class PositionSizingMode(str, Enum):
@@ -125,6 +126,21 @@ class BacktestRequest(BaseModel):
         gt=0.0,
         description="Bollinger Bands standard deviation multiplier.",
     )
+    macd_fast: int = Field(
+        default=12,
+        ge=1,
+        description="Fast EMA period for MACD.",
+    )
+    macd_slow: int = Field(
+        default=26,
+        ge=2,
+        description="Slow EMA period for MACD.",
+    )
+    macd_signal: int = Field(
+        default=9,
+        ge=1,
+        description="Signal line EMA period for MACD.",
+    )
     initial_cash: float = Field(
         default=100_000.0,
         gt=0.0,
@@ -179,6 +195,20 @@ class BacktestRequest(BaseModel):
         ):
             raise ValueError(
                 f"bb_std_dev ({self.bb_std_dev}) must be positive."
+            )
+        if (
+            self.strategy == StrategyType.MACD
+            and self.macd_fast >= self.macd_slow
+        ):
+            raise ValueError(
+                f"macd_fast ({self.macd_fast}) must be strictly less than macd_slow ({self.macd_slow})."
+            )
+        if (
+            self.strategy == StrategyType.MACD
+            and self.macd_signal < 1
+        ):
+            raise ValueError(
+                f"macd_signal ({self.macd_signal}) must be at least 1."
             )
         return self
 
@@ -238,6 +268,10 @@ class ComparisonRequest(BaseModel):
         default_factory=lambda: [(20, 2.0)],
         description="List of (period, std_dev_multiplier) tuples for Bollinger Bands.",
     )
+    macd_configurations: list[tuple[int, int, int]] = Field(
+        default_factory=lambda: [(12, 26, 9)],
+        description="List of (fast_period, slow_period, signal_period) tuples for MACD.",
+    )
     include_buy_and_hold: bool = Field(
         default=True,
         description="Whether to include the Buy and Hold benchmark.",
@@ -263,6 +297,11 @@ class ComparisonRequest(BaseModel):
             if period < 2 or std_dev <= 0.0:
                 raise ValueError(
                     f"Invalid Bollinger config ({period}, {std_dev}): period >= 2 and std_dev > 0."
+                )
+        for fast, slow, sig in self.macd_configurations:
+            if fast < 1 or slow <= fast or sig < 1:
+                raise ValueError(
+                    f"Invalid MACD config ({fast}, {slow}, {sig}): fast >= 1, slow > fast, and signal >= 1."
                 )
         return self
 

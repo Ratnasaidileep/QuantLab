@@ -1,4 +1,4 @@
-export type StrategyType = 'moving_average' | 'rsi' | 'bollinger';
+export type StrategyType = 'moving_average' | 'rsi' | 'bollinger' | 'macd';
 export type PositionSizingMode = 'unit' | 'all_in' | 'fixed_quantity';
 
 export interface DatasetInfo {
@@ -56,6 +56,9 @@ export interface BacktestRequest {
   overbought: number;
   bb_period: number;
   bb_std_dev: number;
+  macd_fast?: number;
+  macd_slow?: number;
+  macd_signal?: number;
   initial_cash: number;
   commission_rate: number;
   slippage_rate: number;

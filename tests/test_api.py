@@ -121,6 +121,42 @@ def test_backtest_bollinger_strategy_success(client: TestClient):
     assert data["metrics"] is not None
 
 
+def test_backtest_macd_strategy_success(client: TestClient):
+    payload = {
+        "dataset": "reliance_daily.csv",
+        "strategy": "macd",
+        "macd_fast": 12,
+        "macd_slow": 26,
+        "macd_signal": 9,
+        "initial_cash": 100000.0,
+        "commission_rate": 0.001,
+        "slippage_rate": 0.001,
+        "sizing_mode": "unit",
+    }
+    response = client.post("/api/v1/backtest", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["strategy_name"] == "MACD"
+    assert "Fast 12 / Slow 26 / Signal 9" in data["configuration"]
+    assert data["bars_processed"] == 441
+    assert len(data["equity_curve"]) == 441
+    assert len(data["trades"]) >= 1
+    assert data["metrics"] is not None
+
+
+def test_backtest_macd_invalid_parameters(client: TestClient):
+    payload = {
+        "dataset": "reliance_daily.csv",
+        "strategy": "macd",
+        "macd_fast": 30,
+        "macd_slow": 20,  # invalid: fast >= slow
+        "macd_signal": 9,
+    }
+    response = client.post("/api/v1/backtest", json=payload)
+    assert response.status_code == 422
+
+
 def test_backtest_all_in_sizing(client: TestClient):
     payload = {
         "dataset": "reliance_daily.csv",
@@ -200,13 +236,14 @@ def test_compare_endpoint_success(client: TestClient):
     data = response.json()
 
     assert data["dataset"] == "reliance_daily.csv"
-    assert len(data["results"]) == 5  # 2 MA + 1 RSI + 1 BB + 1 BnH
+    assert len(data["results"]) == 6  # 2 MA + 1 RSI + 1 BB + 1 MACD + 1 BnH
     assert data["best_strategy"] is not None
 
     strategy_names = [item["strategy_name"] for item in data["results"]]
     assert "Moving Average Crossover" in strategy_names
     assert "RSI" in strategy_names
     assert "Bollinger Bands" in strategy_names
+    assert "MACD" in strategy_names
     assert "Buy and Hold" in strategy_names
 
 

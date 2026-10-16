@@ -10,6 +10,7 @@ from quantlab.backtest.models import Trade
 from quantlab.data.models import Bar
 from quantlab.strategy.base import Strategy
 from quantlab.strategy.bollinger import BollingerBandsStrategy
+from quantlab.strategy.macd import MACDStrategy
 from quantlab.strategy.moving_average import MovingAverageCrossover
 from quantlab.strategy.rsi import RSIStrategy
 
@@ -136,6 +137,16 @@ def _instantiate_strategy(
             std_dev_multiplier=std_dev,
         )
         return strat, False
+    if strategy_name.lower() in ("macd", "moving average convergence divergence"):
+        fast = int(params.get("fast_period", params.get("macd_fast", 12)))
+        slow = int(params.get("slow_period", params.get("macd_slow", 26)))
+        signal = int(params.get("signal_period", params.get("macd_signal", 9)))
+        strat = MACDStrategy(
+            fast_period=fast,
+            slow_period=slow,
+            signal_period=signal,
+        )
+        return strat, True
     raise ValueError(f"Unsupported strategy '{strategy_name}'.")
 
 

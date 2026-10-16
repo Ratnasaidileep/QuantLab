@@ -38,6 +38,7 @@ from quantlab.storage.repository import (
     save_experiment,
 )
 from quantlab.strategy.bollinger import BollingerBandsStrategy
+from quantlab.strategy.macd import MACDStrategy
 from quantlab.strategy.moving_average import MovingAverageCrossover
 from quantlab.strategy.rsi import RSIStrategy
 
@@ -111,7 +112,7 @@ st.sidebar.header("Backtest Configuration")
 
 selected_strategy = st.sidebar.selectbox(
     "Trading Strategy",
-    ["Moving Average Crossover", "RSI", "Bollinger Bands"],
+    ["Moving Average Crossover", "RSI", "Bollinger Bands", "MACD"],
 )
 
 initial_cash = st.sidebar.number_input(
@@ -173,7 +174,7 @@ elif selected_strategy == "RSI":
         )
         st.stop()
 
-else:
+elif selected_strategy == "Bollinger Bands":
     bb_period = st.sidebar.number_input(
         "Bollinger Period (N)",
         min_value=2,
@@ -188,6 +189,30 @@ else:
         format="%.2f",
     )
     st.sidebar.caption("Statistical Mean Reversion: Buy at Lower Band (μ - kσ), exit at Middle SMA (μ).")
+
+else:
+    macd_fast = st.sidebar.number_input(
+        "Fast EMA Period",
+        min_value=1,
+        value=12,
+        step=1,
+    )
+    macd_slow = st.sidebar.number_input(
+        "Slow EMA Period",
+        min_value=2,
+        value=26,
+        step=1,
+    )
+    macd_signal = st.sidebar.number_input(
+        "Signal EMA Period",
+        min_value=1,
+        value=9,
+        step=1,
+    )
+    if macd_fast >= macd_slow:
+        st.sidebar.error("Fast EMA period must be smaller than Slow EMA period.")
+        st.stop()
+    st.sidebar.caption("Trend & Momentum: Long entry when Fast EMA crosses above Slow EMA signal line.")
 
 sizing_label = st.sidebar.selectbox(
     "Position Sizing",
@@ -267,12 +292,20 @@ if run_backtest:
             )
             use_crossover = False
 
-        else:
+        elif selected_strategy == "Bollinger Bands":
             strategy = BollingerBandsStrategy(
                 period=int(bb_period),
                 std_dev_multiplier=float(bb_std_dev),
             )
             use_crossover = False
+
+        else:
+            strategy = MACDStrategy(
+                fast_period=int(macd_fast),
+                slow_period=int(macd_slow),
+                signal_period=int(macd_signal),
+            )
+            use_crossover = True
 
         backtest = Backtest(
             initial_cash=initial_cash,
@@ -435,11 +468,18 @@ if run_backtest:
                     "oversold": float(rsi_oversold),
                     "overbought": float(rsi_overbought),
                 }
-            else:
+            elif selected_strategy == "Bollinger Bands":
                 strat_key = "bollinger"
                 params_dict = {
                     "period": int(bb_period),
                     "std_dev_multiplier": float(bb_std_dev),
+                }
+            else:
+                strat_key = "macd"
+                params_dict = {
+                    "fast_period": int(macd_fast),
+                    "slow_period": int(macd_slow),
+                    "signal_period": int(macd_signal),
                 }
 
             eq_list = [
@@ -499,26 +539,35 @@ if run_backtest:
     st.header("Strategy Configuration")
 
     if selected_strategy == "Moving Average Crossover":
-        config_col1, config_col2, config_col3, config_col4 = (
-            st.columns(4)
-        )
-
+        config_col1, config_col2, config_col3, config_col4 = st.columns(4)
         config_col1.metric("Fast MA", fast_period)
         config_col2.metric("Slow MA", slow_period)
         config_col3.metric("Commission", f"{commission_rate:.2%}")
         config_col4.metric("Slippage", f"{slippage_rate:.2%}")
         st.caption(f"Position Sizing: {sizing_label}")
 
-    else:
-        config_col1, config_col2, config_col3, config_col4 = (
-            st.columns(4)
-        )
-
+    elif selected_strategy == "RSI":
+        config_col1, config_col2, config_col3, config_col4 = st.columns(4)
         config_col1.metric("RSI Period", rsi_period)
         config_col2.metric("Oversold", rsi_oversold)
         config_col3.metric("Overbought", rsi_overbought)
         config_col4.metric("Commission", f"{commission_rate:.2%}")
+        st.caption(f"Slippage: {slippage_rate:.2%} | Position Sizing: {sizing_label}")
 
+    elif selected_strategy == "Bollinger Bands":
+        config_col1, config_col2, config_col3, config_col4 = st.columns(4)
+        config_col1.metric("BB Period (N)", bb_period)
+        config_col2.metric("Multiplier (k)", f"{bb_std_dev:.1f}σ")
+        config_col3.metric("Commission", f"{commission_rate:.2%}")
+        config_col4.metric("Slippage", f"{slippage_rate:.2%}")
+        st.caption(f"Exit at Mean: True | Position Sizing: {sizing_label}")
+
+    else:
+        config_col1, config_col2, config_col3, config_col4 = st.columns(4)
+        config_col1.metric("Fast EMA", macd_fast)
+        config_col2.metric("Slow EMA", macd_slow)
+        config_col3.metric("Signal EMA", macd_signal)
+        config_col4.metric("Commission", f"{commission_rate:.2%}")
         st.caption(f"Slippage: {slippage_rate:.2%} | Position Sizing: {sizing_label}")
 
     # -----------------------------------------------------
@@ -929,7 +978,7 @@ with analytics_tab_tearsheet:
     ts_c1, ts_c2, ts_c3 = st.columns([2, 2, 1])
     ts_strategy = ts_c1.selectbox(
         "Tear-Sheet Strategy",
-        ["Moving Average Crossover", "RSI", "Bollinger Bands"],
+        ["Moving Average Crossover", "RSI", "Bollinger Bands", "MACD"],
         key="ts_strat_select",
     )
     ts_rf_rate = ts_c3.number_input(
@@ -950,10 +999,15 @@ with analytics_tab_tearsheet:
         ts_rsi_p = ts_p1.number_input("RSI Period", min_value=2, value=14, step=1, key="ts_rsi_p")
         ts_os = ts_p2.number_input("Oversold", min_value=1.0, max_value=99.0, value=30.0, step=1.0, key="ts_rsi_os")
         ts_ob = ts_p3.number_input("Overbought", min_value=1.0, max_value=100.0, value=70.0, step=1.0, key="ts_rsi_ob")
-    else:
+    elif ts_strategy == "Bollinger Bands":
         ts_p1, ts_p2 = ts_c2.columns(2)
         ts_bb_n = ts_p1.number_input("BB Period (N)", min_value=2, value=20, step=1, key="ts_bb_n")
         ts_bb_k = ts_p2.number_input("Multiplier (k)", min_value=0.1, value=2.0, step=0.1, key="ts_bb_k")
+    else:
+        ts_p1, ts_p2, ts_p3 = ts_c2.columns(3)
+        ts_macd_fast = ts_p1.number_input("Fast EMA", min_value=1, value=12, step=1, key="ts_macd_fast")
+        ts_macd_slow = ts_p2.number_input("Slow EMA", min_value=2, value=26, step=1, key="ts_macd_slow")
+        ts_macd_signal = ts_p3.number_input("Signal EMA", min_value=1, value=9, step=1, key="ts_macd_signal")
 
     if st.button("▶ Generate Quantitative Tear-Sheet", key="btn_run_tearsheet"):
         with st.spinner("Simulating strategy and computing risk tear-sheet..."):
@@ -968,9 +1022,19 @@ with analytics_tab_tearsheet:
                 elif ts_strategy == "RSI":
                     strat_obj = RSIStrategy(period=int(ts_rsi_p), oversold=float(ts_os), overbought=float(ts_ob))
                     crossover_flag = False
-                else:
+                elif ts_strategy == "Bollinger Bands":
                     strat_obj = BollingerBandsStrategy(period=int(ts_bb_n), std_dev_multiplier=float(ts_bb_k))
                     crossover_flag = False
+                else:
+                    if ts_macd_fast >= ts_macd_slow:
+                        st.error("Fast EMA must be smaller than Slow EMA.")
+                        st.stop()
+                    strat_obj = MACDStrategy(
+                        fast_period=int(ts_macd_fast),
+                        slow_period=int(ts_macd_slow),
+                        signal_period=int(ts_macd_signal),
+                    )
+                    crossover_flag = True
 
                 b_engine = Backtest(
                     initial_cash=initial_cash,

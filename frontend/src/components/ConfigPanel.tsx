@@ -79,6 +79,11 @@ export function ConfigPanel({
     config.strategy === 'rsi' && config.oversold >= config.overbought;
   const isBbInvalid =
     config.strategy === 'bollinger' && (config.bb_period < 2 || config.bb_std_dev <= 0);
+  const isMacdInvalid =
+    config.strategy === 'macd' &&
+    ((config.macd_fast ?? 12) >= (config.macd_slow ?? 26) ||
+      (config.macd_fast ?? 12) < 1 ||
+      (config.macd_signal ?? 9) < 1);
 
   return (
     <aside className="config-panel">
@@ -187,6 +192,7 @@ export function ConfigPanel({
           <option value="moving_average">Moving Average Crossover</option>
           <option value="rsi">Relative Strength Index (RSI)</option>
           <option value="bollinger">Bollinger Bands (Mean Reversion)</option>
+          <option value="macd">MACD (Convergence Divergence)</option>
         </select>
       </div>
 
@@ -301,6 +307,52 @@ export function ConfigPanel({
         </div>
       )}
 
+      {config.strategy === 'macd' && (
+        <div className="strategy-options">
+          <div className="form-row">
+            <div className="form-group">
+              <label htmlFor="macd-fast">Fast EMA</label>
+              <input
+                id="macd-fast"
+                type="number"
+                min="1"
+                max="100"
+                value={config.macd_fast ?? 12}
+                onChange={(e) => updateField('macd_fast', Number.parseInt(e.target.value, 10) || 1)}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="macd-slow">Slow EMA</label>
+              <input
+                id="macd-slow"
+                type="number"
+                min="2"
+                max="200"
+                value={config.macd_slow ?? 26}
+                onChange={(e) => updateField('macd_slow', Number.parseInt(e.target.value, 10) || 2)}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="macd-signal">Signal EMA</label>
+              <input
+                id="macd-signal"
+                type="number"
+                min="1"
+                max="50"
+                value={config.macd_signal ?? 9}
+                onChange={(e) => updateField('macd_signal', Number.parseInt(e.target.value, 10) || 1)}
+              />
+            </div>
+          </div>
+          <span className="ingest-hint" style={{ marginTop: '0.25rem', display: 'block' }}>
+            Trend & Momentum: Triggers Long when MACD Line (Fast EMA − Slow EMA) crosses above Signal Line.
+          </span>
+          {isMacdInvalid && (
+            <div className="field-error">Fast period must be strictly less than Slow period, and Signal period ≥ 1.</div>
+          )}
+        </div>
+      )}
+
       <div className="form-group">
         <label htmlFor="sizing-mode">Position Sizing</label>
         <select
@@ -369,7 +421,7 @@ export function ConfigPanel({
           type="button"
           className="btn btn-primary"
           onClick={onRunBacktest}
-          disabled={isLoading || isMaInvalid || isRsiInvalid || isBbInvalid}
+          disabled={isLoading || isMaInvalid || isRsiInvalid || isBbInvalid || isMacdInvalid}
         >
           {isLoading ? <span className="spinner"></span> : '▶ Run Backtest'}
         </button>
