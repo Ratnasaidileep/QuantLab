@@ -11,11 +11,12 @@ from quantlab.api.schemas import (
     ComparisonResponse,
     StrategyComparisonItemDTO,
 )
+from quantlab.config import settings
 from quantlab.data.csv_loader import load_bars_from_csv
 
 router = APIRouter(prefix="/compare", tags=["Strategy Comparison"])
 
-DATA_DIR = Path("data")
+DATA_DIR = settings.data_dir
 
 
 @router.post("", response_model=ComparisonResponse)

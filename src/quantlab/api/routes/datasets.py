@@ -12,6 +12,7 @@ from quantlab.api.schemas import (
     DatasetUploadResponse,
     FetchDatasetRequest,
 )
+from quantlab.config import settings
 from quantlab.data.csv_loader import (
     fetch_ohlcv_from_yfinance,
     load_bars_from_csv,
@@ -25,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/datasets", tags=["Datasets"])
 
-DATA_DIR = Path("data")
+DATA_DIR = settings.data_dir
 
 
 @router.get("", response_model=DatasetListResponse)

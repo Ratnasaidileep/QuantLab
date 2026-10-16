@@ -11,6 +11,7 @@ from quantlab.api.schemas import (
     TradeDTO,
 )
 from quantlab.backtest.engine import Backtest
+from quantlab.config import settings
 from quantlab.data.csv_loader import load_bars_from_csv
 from quantlab.strategy.bollinger import BollingerBandsStrategy
 from quantlab.strategy.moving_average import MovingAverageCrossover
@@ -18,7 +19,7 @@ from quantlab.strategy.rsi import RSIStrategy
 
 router = APIRouter(prefix="/backtest", tags=["Backtest"])
 
-DATA_DIR = Path("data")
+DATA_DIR = settings.data_dir
 
 
 @router.post("", response_model=BacktestResponse)

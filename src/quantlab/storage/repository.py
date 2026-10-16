@@ -5,7 +5,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-DEFAULT_DB_PATH = Path("data/quantlab.db")
+from quantlab.config import settings
+
+DEFAULT_DB_PATH = settings.db_path
 
 
 @dataclass(frozen=True)

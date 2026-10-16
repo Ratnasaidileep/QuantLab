@@ -2,6 +2,7 @@ from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from quantlab.api.routes import analytics, backtest, basket, compare, datasets, experiments, health
+from quantlab.config import settings
 
 
 def create_app() -> FastAPI:
@@ -16,10 +17,10 @@ def create_app() -> FastAPI:
         ),
     )
 
-    # Allow local frontend development (e.g. Vite dev server on port 5173)
+    # Allow configured CORS origins for web development and production deployment
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=settings.cors_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

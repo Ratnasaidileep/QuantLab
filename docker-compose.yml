@@ -1,0 +1,88 @@
+# ==============================================================================
+# QuantLab Multi-Container Orchestration (Docker Compose)
+# Services:
+#   1. backend: FastAPI REST API on port 8000
+#   2. frontend: React + TypeScript + Nginx reverse-proxy on port 3000
+#   3. streamlit: Streamlit research dashboard on port 8501 (optional profile)
+# ==============================================================================
+
+version: "3.8"
+
+services:
+  # ----------------------------------------------------------------------------
+  # FastAPI Quantitative Research Engine Backend
+  # ----------------------------------------------------------------------------
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: quantlab-backend
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      # Mount data directory to persist market datasets and SQLite database
+      - ./data:/app/data
+    environment:
+      - QUANTLAB_ENV=${QUANTLAB_ENV:-production}
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - QUANTLAB_DATA_DIR=/app/data
+      - QUANTLAB_DB_PATH=/app/data/quantlab.db
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - quantlab-network
+
+  # ----------------------------------------------------------------------------
+  # React + TypeScript Frontend (Served via Nginx Reverse Proxy)
+  # ----------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: quantlab-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - quantlab-network
+
+  # ----------------------------------------------------------------------------
+  # Streamlit Interactive Prototype (Optional: run with --profile full)
+  # ----------------------------------------------------------------------------
+  streamlit:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: quantlab-streamlit
+    restart: unless-stopped
+    profiles:
+      - streamlit
+      - full
+    ports:
+      - "${STREAMLIT_PORT:-8501}:8501"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - QUANTLAB_ENV=${QUANTLAB_ENV:-production}
+      - QUANTLAB_DATA_DIR=/app/data
+      - QUANTLAB_DB_PATH=/app/data/quantlab.db
+    command: ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - quantlab-network
+
+networks:
+  quantlab-network:
+    driver: bridge

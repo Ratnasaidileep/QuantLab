@@ -10,6 +10,7 @@ from quantlab.api.schemas import (
     MetricsDTO,
     TailRiskDTO,
 )
+from quantlab.config import settings
 from quantlab.data.csv_loader import load_bars_from_csv
 from quantlab.portfolio.basket import (
     AllocationWeighting,
@@ -19,7 +20,7 @@ from quantlab.portfolio.basket import (
 
 router = APIRouter(prefix="/basket", tags=["Basket Portfolio"])
 
-DATA_DIR = Path("data")
+DATA_DIR = settings.data_dir
 
 
 def _symbol_from_filename(filename: str) -> str:

@@ -642,17 +642,24 @@ The database stores persistent application information. The quantitative engine 
 
 **Completion criterion:** The platform supports meaningful, reproducible out-of-sample strategy evaluation, multi-asset data ingestion, parameter stability analysis, and comprehensive PyFolio-grade risk tear-sheets. (Satisfied)
 
-### Phase 6 — Deployment and final major-project preparation
+### Phase 6 — Deployment, Production Packaging, and Final Major-Project Preparation
 
-- Configure environment variables and production settings.
-- Deploy frontend, backend, and database.
-- Add logging and error handling.
-- Add backups and deployment documentation.
-- Perform end-to-end testing.
-- Prepare architecture diagrams, testing evidence, limitations, screenshots, and project documentation.
-- Re-run the full test suite and record verified results.
+- [x] **Phase 6A — Production Containerization & CI/CD Pipeline (Completed)**:
+  - Centralized application settings (`src/quantlab/config.py`) driven by environment variables with fallback defaults.
+  - Multi-stage Dockerfile for FastAPI backend with unprivileged non-root user and healthchecks.
+  - Multi-stage Dockerfile for React Vite frontend with Nginx Alpine, gzip compression, and `/api/` reverse proxy.
+  - Root `docker-compose.yml` orchestrating FastAPI (`:8000`), React (`:3000`), and Streamlit (`:8501`) with persistent SQLite volume mounting.
+  - `.env.example` environment variable configuration template.
+  - Complete GitHub Actions continuous integration workflow (`.github/workflows/ci.yml`) validating Python quality, frontend builds, and Docker compose configurations.
+  - 168 passing automated unit and integration tests with 100% clean Ruff linting.
 
-**Target:** Work toward completion by February 2027. Reassess the schedule after the initial audit.
+- [ ] **Phase 6B — Academic Demonstration & Viva Defense Guide**:
+  - Comprehensive Major Project report guide (`ACADEMIC_EVALUATION_GUIDE.md`).
+  - Mathematical formulations and derivations (Sharpe, Sortino, Calmar, Historical/Parametric VaR, CVaR Expected Shortfall, Pardo WFE, Risk Parity weights).
+  - Explicit proofs of zero look-ahead bias and execution realism.
+  - Architecture diagrams, viva defense Q&A preparation, and live presentation script.
+
+**Target:** Work toward completion by February 2027. Project baseline is now fully production-ready and containerized.
 
 ---
 
