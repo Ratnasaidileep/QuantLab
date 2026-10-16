@@ -673,13 +673,14 @@ The database stores persistent application information. The quantitative engine 
   - Complete GitHub Actions continuous integration workflow (`.github/workflows/ci.yml`) validating Python quality, frontend builds, and Docker compose configurations.
   - 168 passing automated unit and integration tests with 100% clean Ruff linting.
 
-- [ ] **Phase 6B — Academic Demonstration & Viva Defense Guide**:
-  - Comprehensive Major Project report guide (`ACADEMIC_EVALUATION_GUIDE.md`).
-  - Mathematical formulations and derivations (Sharpe, Sortino, Calmar, Historical/Parametric VaR, CVaR Expected Shortfall, Pardo WFE, Risk Parity weights).
+- [x] **Phase 6B — Academic Demonstration & Viva Defense Guide (Completed)**:
+  - Comprehensive Major Project report and viva defense guide (`ACADEMIC_EVALUATION_GUIDE.md`).
+  - Mathematical formulations and derivations (Sharpe, Sortino, Calmar, Historical/Parametric VaR, CVaR Expected Shortfall, Pardo WFE, Risk Parity weights, EMA/MACD, Wilder's RSI, Bollinger Bands, intraday Stop-Loss / Trailing Stops).
   - Explicit proofs of zero look-ahead bias and execution realism.
-  - Architecture diagrams, viva defense Q&A preparation, and live presentation script.
+  - Architecture diagrams, viva defense Q&A preparation, and 10-minute live presentation script.
+  - 191 passing automated unit and integration tests with 100% clean Ruff linting.
 
-**Target:** Work toward completion by February 2027. Project baseline is now fully production-ready and containerized.
+**Target:** Work toward completion by February 2027. Project baseline and academic documentation are fully complete and production-ready.
 
 ---
 
