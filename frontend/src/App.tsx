@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { useAuth } from './hooks/useAuth';
 import { AppLayout } from './components/layout/AppLayout';
 import './App.css';
 
@@ -28,6 +29,9 @@ const DatasetsPage = lazy(() =>
 const ExperimentsPage = lazy(() =>
   import('./features/experiments/ExperimentsPage').then((m) => ({ default: m.ExperimentsPage }))
 );
+const ProfilePage = lazy(() =>
+  import('./features/profile/ProfilePage').then((m) => ({ default: m.ProfilePage }))
+);
 const SettingsPage = lazy(() =>
   import('./features/settings/SettingsPage').then((m) => ({ default: m.SettingsPage }))
 );
@@ -52,18 +56,29 @@ function PageLoadingFallback() {
     >
       <div className="spinner large"></div>
       <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-        Loading module...
+        Loading QuantLab...
       </span>
     </div>
   );
 }
 
 export function App() {
+  const { isAuthenticated, isLoadingUser } = useAuth();
+
+  if (isLoadingUser) {
+    return <PageLoadingFallback />;
+  }
+
   return (
     <Suspense fallback={<PageLoadingFallback />}>
       <Routes>
         <Route element={<AppLayout />}>
-          <Route path="/" element={<DashboardPage />} />
+          {/* Authentication Entry Gate: first page is Login if unauthenticated */}
+          <Route
+            path="/"
+            element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <LoginPage />}
+          />
+          <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/strategy-lab" element={<StrategyLabPage />} />
           <Route path="/analytics" element={<AnalyticsPage />} />
           <Route path="/portfolio" element={<PortfolioPage />} />
@@ -71,6 +86,7 @@ export function App() {
           <Route path="/heatmap" element={<HeatmapPage />} />
           <Route path="/datasets" element={<DatasetsPage />} />
           <Route path="/experiments" element={<ExperimentsPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />

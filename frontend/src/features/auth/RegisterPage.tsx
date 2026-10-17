@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Lock, User, AlertCircle, ArrowLeft, UserPlus } from 'lucide-react';
+import { Eye, EyeOff, Lock, User, AlertCircle, UserPlus } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { registerUser } from '../../api/client';
 import { Card } from '../../components/ui/Card';
@@ -19,7 +19,7 @@ export function RegisterPage() {
 
   React.useEffect(() => {
     if (isAuthenticated) {
-      navigate('/strategy-lab', { replace: true });
+      navigate('/dashboard', { replace: true });
     }
   }, [isAuthenticated, navigate]);
 
@@ -45,7 +45,7 @@ export function RegisterPage() {
     try {
       const res = await registerUser(cleanUser, password);
       login(res.access_token, res.user);
-      navigate('/strategy-lab');
+      navigate('/dashboard');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Registration failed.';
       setError(msg);
@@ -243,7 +243,7 @@ export function RegisterPage() {
 
         <div style={{ marginTop: '1rem', textAlign: 'center' }}>
           <Link
-            to="/strategy-lab"
+            to="/dashboard"
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -252,8 +252,7 @@ export function RegisterPage() {
               color: 'var(--text-muted)',
             }}
           >
-            <ArrowLeft size={13} />
-            <span>Continue as Guest</span>
+            <span>Continue as Guest &rarr;</span>
           </Link>
         </div>
       </Card>

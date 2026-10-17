@@ -10,6 +10,7 @@ import {
   Database,
   History,
   Settings,
+  User,
   PanelLeftClose,
   PanelLeftOpen,
   X,
@@ -24,7 +25,7 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { to: '/', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
+  { to: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
   { to: '/strategy-lab', label: 'Strategy Lab', icon: <FlaskConical size={18} /> },
   { to: '/analytics', label: 'Risk Tear-Sheet', icon: <FileText size={18} /> },
   { to: '/portfolio', label: 'Portfolio Basket', icon: <Briefcase size={18} /> },
@@ -32,6 +33,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/heatmap', label: 'Parameter Heatmap', icon: <Grid size={18} /> },
   { to: '/datasets', label: 'Dataset Library', icon: <Database size={18} /> },
   { to: '/experiments', label: 'Saved Experiments', icon: <History size={18} /> },
+  { to: '/profile', label: 'Profile & History', icon: <User size={18} /> },
   { to: '/settings', label: 'Settings', icon: <Settings size={18} /> },
 ];
 

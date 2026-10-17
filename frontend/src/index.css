@@ -1,66 +1,69 @@
 /* QuantLab Unified Design System & Theme Tokens */
+/* Option 1: Institutional Terminal (Obsidian + Cyan + Emerald) */
 
 :root {
-  /* Surface & Background (Dark Mode Default) */
-  --bg-app: #0a0e17;
-  --bg-main: #0a0e17;
+  /* Surface & Background (Institutional Obsidian Dark Default) */
+  --bg-app: #090d16;
+  --bg-main: #090d16;
   --bg-card: #111827;
-  --bg-card-subtle: #182234;
+  --bg-card-subtle: #151f32;
   --bg-surface: #111827;
-  --bg-elevated: #1e293b;
-  --bg-input: #1e293b;
-  --bg-hover: #263348;
-  --bg-active: #2d3d56;
+  --bg-elevated: #1a2436;
+  --bg-input: #141d2c;
+  --bg-hover: #1e2c42;
+  --bg-active: #253652;
 
   /* Borders & Dividers */
   --border-color: #1e293b;
-  --border-subtle: #334155;
-  --border-medium: #475569;
-  --border-active: #64748b;
+  --border-subtle: #2d3c52;
+  --border-medium: #3e5270;
+  --border-active: #38bdf8;
 
   /* Typography */
   --text-main: #f8fafc;
   --text-primary: #f8fafc;
   --text-secondary: #94a3b8;
-  --text-muted: #94a3b8;
-  --text-dim: #64748b;
+  --text-muted: #64748b;
+  --text-dim: #475569;
 
-  /* Brand Accents */
-  --brand-blue: #3b82f6;
-  --brand-blue-hover: #2563eb;
-  --brand-glow: rgba(59, 130, 246, 0.15);
+  /* Brand Accents (Electric Cyan & Neon Violet) */
+  --brand-blue: #38bdf8;
+  --brand-blue-hover: #0ea5e9;
+  --brand-glow: rgba(56, 189, 248, 0.16);
+  --accent-primary: #38bdf8;
   --accent-cyan: #38bdf8;
-  --accent-blue: #3b82f6;
-  --accent-hover: #2563eb;
+  --accent-blue: #38bdf8;
+  --accent-secondary: #818cf8;
+  --accent-hover: #0ea5e9;
 
   /* Financial Semantic Colors */
   --profit: #10b981;
   --profit-green: #10b981;
   --profit-bg: rgba(16, 185, 129, 0.12);
-  --profit-border: rgba(16, 185, 129, 0.25);
+  --profit-border: rgba(16, 185, 129, 0.28);
 
-  --loss: #f43f5e;
-  --loss-red: #f43f5e;
-  --loss-bg: rgba(244, 63, 94, 0.12);
-  --loss-border: rgba(244, 63, 94, 0.25);
+  --loss: #ef4444;
+  --loss-red: #ef4444;
+  --loss-bg: rgba(239, 68, 68, 0.12);
+  --loss-border: rgba(239, 68, 68, 0.28);
 
-  --benchmark: #38bdf8;
-  --benchmark-bg: rgba(56, 189, 248, 0.12);
+  --benchmark: #f59e0b;
+  --benchmark-bg: rgba(245, 158, 11, 0.12);
 
   --warning: #f59e0b;
   --warning-yellow: #f59e0b;
   --warning-bg: rgba(245, 158, 11, 0.12);
 
   /* Glassmorphism & Elevation */
-  --glass-bg: rgba(17, 24, 39, 0.85);
-  --glass-border: rgba(255, 255, 255, 0.08);
-  --glass-blur: blur(12px);
+  --glass-bg: rgba(17, 24, 39, 0.90);
+  --glass-border: rgba(56, 189, 248, 0.12);
+  --glass-blur: blur(14px);
 
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -4px rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.45), 0 2px 4px -2px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.6), 0 4px 6px -4px rgba(0, 0, 0, 0.5);
 
-  --focus-ring: 0 0 0 2px rgba(59, 130, 246, 0.6);
+  --focus-ring: 0 0 0 2px rgba(56, 189, 248, 0.6);
 
   /* Typography Fonts */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -76,7 +79,7 @@
   --header-height: 64px;
 }
 
-/* Genuine Light Theme */
+/* Genuine Light Theme (Daylight Trading Floor) */
 [data-theme='light'] {
   --bg-app: #f8fafc;
   --bg-main: #f8fafc;
@@ -91,7 +94,7 @@
   --border-color: #e2e8f0;
   --border-subtle: #cbd5e1;
   --border-medium: #94a3b8;
-  --border-active: #64748b;
+  --border-active: #0284c7;
 
   --text-main: #0f172a;
   --text-primary: #0f172a;
@@ -99,120 +102,73 @@
   --text-muted: #64748b;
   --text-dim: #94a3b8;
 
-  --brand-blue: #2563eb;
-  --brand-blue-hover: #1d4ed8;
-  --brand-glow: rgba(37, 99, 235, 0.12);
+  --brand-blue: #0284c7;
+  --brand-blue-hover: #0369a1;
+  --brand-glow: rgba(2, 132, 199, 0.12);
+  --accent-primary: #0284c7;
   --accent-cyan: #0284c7;
-  --accent-blue: #2563eb;
-  --accent-hover: #1d4ed8;
+  --accent-blue: #0284c7;
+  --accent-secondary: #6366f1;
+  --accent-hover: #0369a1;
 
-  --profit: #059669;
-  --profit-green: #059669;
-  --profit-bg: rgba(5, 150, 105, 0.1);
-  --profit-border: rgba(5, 150, 105, 0.25);
+  --profit: #16a34a;
+  --profit-green: #16a34a;
+  --profit-bg: rgba(22, 163, 74, 0.1);
+  --profit-border: rgba(22, 163, 74, 0.25);
 
-  --loss: #e11d48;
-  --loss-red: #e11d48;
-  --loss-bg: rgba(225, 29, 72, 0.1);
-  --loss-border: rgba(225, 29, 72, 0.25);
+  --loss: #dc2626;
+  --loss-red: #dc2626;
+  --loss-bg: rgba(220, 38, 38, 0.1);
+  --loss-border: rgba(220, 38, 38, 0.25);
 
-  --benchmark: #0284c7;
-  --benchmark-bg: rgba(2, 132, 199, 0.1);
+  --benchmark: #d97706;
+  --benchmark-bg: rgba(217, 119, 6, 0.1);
 
   --warning: #d97706;
   --warning-yellow: #d97706;
   --warning-bg: rgba(217, 119, 6, 0.1);
 
-  --glass-bg: rgba(255, 255, 255, 0.9);
+  --glass-bg: rgba(255, 255, 255, 0.92);
   --glass-border: rgba(0, 0, 0, 0.08);
+  --glass-blur: blur(14px);
 
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.04);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
 
-  --focus-ring: 0 0 0 2px rgba(37, 99, 235, 0.5);
+  --focus-ring: 0 0 0 2px rgba(2, 132, 199, 0.4);
 }
 
-* {
+/* Base Body Styles */
+*, *::before, *::after {
   box-sizing: border-box;
-  margin: 0;
-  padding: 0;
 }
 
 body {
+  margin: 0;
+  padding: 0;
   font-family: var(--font-sans);
   background-color: var(--bg-app);
   color: var(--text-main);
-  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
-  min-height: 100vh;
-  transition: background-color var(--transition-normal), color var(--transition-normal);
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'tnum' on, 'cv02' on, 'cv03' on, 'cv04' on;
 }
 
-#root {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-}
-
-/* Tabular Numerals for Financial Data */
-.tabular-nums,
-.metric-value,
-.stat-val,
-.trade-price,
-.pnl-val,
-table td {
+/* Monospace numerals helper */
+.font-mono {
+  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
-  font-feature-settings: 'tnum' 1;
 }
 
-/* Links */
-a {
-  color: var(--brand-blue);
-  text-decoration: none;
-  transition: color var(--transition-fast);
-}
-
-a:hover {
-  text-decoration: underline;
-}
-
-/* Button & Interactive Resets */
-button {
-  font-family: inherit;
-  cursor: pointer;
-  border: none;
-  background: none;
-}
-
-button:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible {
-  outline: none;
-  box-shadow: var(--focus-ring);
-}
-
-/* Respect Reduced Motion */
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
-  }
-}
-
-/* Custom Financial Scrollbars */
+/* Custom Scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--bg-card);
+  background: var(--bg-app);
 }
 
 ::-webkit-scrollbar-thumb {
