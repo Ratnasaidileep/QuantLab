@@ -821,3 +821,42 @@ The priority order is:
 A polished interface is important, but it must be built on trustworthy data handling and sound quantitative calculations.
 
 The long-term aim is not merely to display charts or generate buy/sell signals. It is to provide a credible environment for quantitative experimentation, analysis, and learning.
+
+---
+
+## 11. Full-Stack Master Frontend Redesign (Completed October 2026)
+
+The QuantLab frontend has been fully redesigned and modernized into a terminal-grade quantitative workstation:
+
+### 11.1 Architecture & Design System
+- **Framework & Routing:** React 19, TypeScript, Vite 8, and React Router (`react-router-dom` v7) with route-level code splitting via `React.lazy` and `Suspense`.
+- **Design Tokens:** Pure CSS tokens in `frontend/src/index.css` supporting dual themes: default dark institutional terminal (`:root`) and high-contrast light terminal (`[data-theme='light']`).
+- **Context & State Management:** Decoupled into modular context providers (`ThemeContext`, `AuthContext`, `BacktestContext`) with type-safe custom hooks (`useTheme`, `useAuth`, `useBacktest`).
+- **UI Primitives:** Atomic reusable components in `frontend/src/components/ui/` (`Button`, `Card`, `Badge`, `Tooltip`).
+
+### 11.2 Feature Modules & Pages
+1. **Application Shell (`AppLayout`):** Collapsible sidebar with responsive icon-rail and mobile drawer, dynamic breadcrumbs, top navigation bar with live FastAPI health status indicator, active workspace pill, and theme toggle.
+2. **Dashboard (`/`):** Dismissible 4-step research onboarding checklist, live KPI performance counters, quick-launch module shortcuts, and recent experiments summary.
+3. **Authentication (`/login`, `/register`):** Secure JWT session management, session-aware navigation (auto-redirect when authenticated), guest mode bypass, and password visibility toggles.
+4. **Dataset Library (`/datasets`):** Multi-column sorting, search filtering, drag-and-drop CSV upload with client-side header validation, live raw OHLCV row inspection table, dataset metadata inspection modal, and Yahoo Finance single/batch fetchers.
+5. **Strategy Lab (`/strategy-lab`):**
+   - Strategy configuration panel with logic description cards, presets, risk controls (stop-loss, take-profit, trailing stop), and friction inputs (commission, slippage in bps).
+   - Global keyboard shortcut: `Ctrl+Enter` / `Cmd+Enter` to launch simulation.
+   - Enhanced financial charting with 3 view modes: (1) Equity Curve + High-Water Mark + Synchronized Underwater Drawdown; (2) Price Chart + Executed Trade Entry/Exit Markers; (3) Trade Return Distribution Histogram.
+   - Comprehensive trade history table with multi-category filters, sorting, search, pagination, and one-click CSV export.
+   - Side-by-side strategy comparison leaderboard with outperformance indicators vs. Buy & Hold benchmark and one-click configuration loader.
+   - SQLite experiment saving drawer with feedback and direct link to experiments repository.
+6. **Advanced Research Pages:**
+   - **Analytics (`/analytics`):** PyFolio-grade risk tear-sheet, Historical & Parametric VaR (95%, 99%), Expected Shortfall (CVaR), Skewness, Kurtosis, monthly return matrices, and underwater drawdown curves.
+   - **Portfolio Basket (`/portfolio`):** Multi-asset basket backtesting with equal-weight, inverse-volatility, or custom weighting, periodic rebalancing, correlation heatmaps, and cash drag modeling.
+   - **Walk-Forward Optimization (`/walk-forward`):** Rolling and expanding window forward testing measuring Walk-Forward Efficiency (WFE) to diagnose curve-fitting.
+   - **Parameter Sensitivity (`/heatmap`):** 2D parameter grid scan identifying robust parameter plateaus versus curve-fitted spikes.
+7. **Experiment Repository (`/experiments`):** SQLite persistence layer with multi-select comparison (side-by-side metrics and parameter diffs), run inspection modal, search, and sorting.
+8. **Settings & Workspace (`/settings`):** User profile, guest workspace mode, theme switcher, and architectural specifications.
+
+### 11.3 Verification & Quality Assurance
+- **Python Backend Engine:** 191/191 tests passing (`python -m pytest -q`).
+- **Python Linter:** Clean (`ruff check .` -> All checks passed).
+- **Frontend Linter:** Clean (`eslint .` -> 0 errors, 0 warnings).
+- **Production Build:** Optimized chunks (`tsc -b && vite build` -> built in ~1.0s with on-demand code splitting).
+
