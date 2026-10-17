@@ -860,3 +860,10 @@ The QuantLab frontend has been fully redesigned and modernized into a terminal-g
 - **Frontend Linter:** Clean (`eslint .` -> 0 errors, 0 warnings).
 - **Production Build:** Optimized chunks (`tsc -b && vite build` -> built in ~1.0s with on-demand code splitting).
 
+### 11.4 Authentication Entry Gateway, Top Navbar, Profile & Theme (Implemented October 2026)
+- **Authentication Entry Gateway (`/`):** When the application is launched, unauthenticated visitors are immediately presented with the full Sign In / Register gateway page. Authenticated users are automatically redirected to the main `/dashboard`. Guest evaluation mode ("Continue as Guest →") remains accessible for demonstration and evaluation without forced registration.
+- **Top Navigation Bar (`Header`):** Glassmorphic top navigation bar displaying quick-access links to all QuantLab modules (`Dashboard`, `Strategy Lab`, `Analytics`, `Portfolio`, `Walk-Forward`, `Heatmap`, `Datasets`, `Experiments`), complete with route-active indicators, backend API status badge, and theme switcher.
+- **Profile Logo & Navigation:** Top-right circular profile avatar displaying the user's initial and username, linking directly to the dedicated `/profile` route, accompanied by a quick logout button.
+- **User Profile & Research Workspace (`/profile`):** Comprehensive user profile page displaying account details, user ID, member registration date, session state, and SQLite storage indicators. Includes an interactive KPI scorecard (total saved experiments, win rate %, best net return, highest Sharpe ratio) and a personal research history table with "Restore into Strategy Lab", "Inspect", and "Delete" actions.
+- **Institutional Terminal Design Theme:** Pure CSS color tokens styled in accordance with Option 1: Institutional Terminal (Obsidian `#090d16` canvas, Midnight `#111827` cards, Electric Cyan `#38bdf8` accent, Mint Emerald `#10b981` profit, Crimson Coral `#ef4444` loss, Amber `#f59e0b` benchmark).
+
