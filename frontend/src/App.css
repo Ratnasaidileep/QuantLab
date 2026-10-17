@@ -1219,3 +1219,28 @@
 }
 
 
+
+/* Sidebar and Header Mobile Responsive Rules */
+@media (max-width: 900px) {
+  .mobile-hamburger-btn {
+    display: inline-flex !important;
+  }
+
+  .mobile-close-btn {
+    display: inline-flex !important;
+  }
+
+  .quantlab-sidebar {
+    position: fixed !important;
+    left: 0 !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    transform: translateX(-100%);
+    width: 280px !important;
+    box-shadow: var(--shadow-lg);
+  }
+
+  .quantlab-sidebar.mobile-open {
+    transform: translateX(0) !important;
+  }
+}
