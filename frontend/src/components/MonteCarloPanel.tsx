@@ -193,14 +193,8 @@ export function MonteCarloPanel({
             <select
               value={strategy}
               onChange={(e) => setStrategy(e.target.value as StrategyType)}
-              style={{
-                padding: '0.35rem 0.6rem',
-                borderRadius: '6px',
-                fontSize: '0.8rem',
-                backgroundColor: 'var(--bg-elevated)',
-                border: '1px solid var(--border-color)',
-                color: 'var(--text-primary)',
-              }}
+              className="form-control form-control-sm"
+              style={{ width: 'auto' }}
             >
               <option value="moving_average">SMA Crossover</option>
               <option value="rsi">RSI Mean-Reversion</option>
@@ -349,14 +343,8 @@ export function MonteCarloPanel({
             <select
               value={numSimulations}
               onChange={(e) => setNumSimulations(Number(e.target.value))}
-              style={{
-                padding: '0.35rem 0.6rem',
-                borderRadius: '6px',
-                fontSize: '0.8rem',
-                backgroundColor: 'var(--bg-elevated)',
-                border: '1px solid var(--border-color)',
-                color: 'var(--text-primary)',
-              }}
+              className="form-control form-control-sm"
+              style={{ width: 'auto' }}
             >
               <option value={200}>200 runs (Fast)</option>
               <option value={500}>500 runs</option>
@@ -372,14 +360,8 @@ export function MonteCarloPanel({
             <select
               value={ruinThreshold}
               onChange={(e) => setRuinThreshold(Number(e.target.value))}
-              style={{
-                padding: '0.35rem 0.6rem',
-                borderRadius: '6px',
-                fontSize: '0.8rem',
-                backgroundColor: 'var(--bg-elevated)',
-                border: '1px solid var(--border-color)',
-                color: 'var(--text-primary)',
-              }}
+              className="form-control form-control-sm"
+              style={{ width: 'auto' }}
             >
               <option value={0.15}>15% Drawdown</option>
               <option value={0.20}>20% Drawdown</option>
@@ -396,14 +378,8 @@ export function MonteCarloPanel({
             <select
               value={mode}
               onChange={(e) => setMode(e.target.value as MonteCarloMode)}
-              style={{
-                padding: '0.35rem 0.6rem',
-                borderRadius: '6px',
-                fontSize: '0.8rem',
-                backgroundColor: 'var(--bg-elevated)',
-                border: '1px solid var(--border-color)',
-                color: 'var(--text-primary)',
-              }}
+              className="form-control form-control-sm"
+              style={{ width: 'auto' }}
             >
               <option value="trade_shuffle">Trade Shuffling (Permutation)</option>
               <option value="bootstrap">Bootstrap Resampling</option>

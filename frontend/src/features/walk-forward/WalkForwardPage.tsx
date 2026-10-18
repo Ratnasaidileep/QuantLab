@@ -42,14 +42,8 @@ export function WalkForwardPage() {
               id="wf-dataset-select"
               value={config.dataset}
               onChange={(e) => setConfig((prev) => ({ ...prev, dataset: e.target.value }))}
-              style={{
-                padding: '0.3rem 0.6rem',
-                fontSize: '0.8rem',
-                borderRadius: '6px',
-                backgroundColor: 'var(--bg-elevated)',
-                border: '1px solid var(--border-color)',
-                color: 'var(--text-primary)',
-              }}
+              className="form-control form-control-sm"
+              style={{ width: 'auto' }}
             >
               {datasets.map((d) => (
                 <option key={d.filename} value={d.filename}>

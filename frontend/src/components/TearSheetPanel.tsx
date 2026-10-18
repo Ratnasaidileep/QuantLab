@@ -185,6 +185,7 @@ export function TearSheetPanel({
           <select
             value={strategy}
             onChange={(e) => setStrategy(e.target.value as StrategyType)}
+            className="form-control"
           >
             <option value="moving_average">Moving Average Crossover</option>
             <option value="rsi">Relative Strength Index (RSI)</option>
@@ -201,6 +202,7 @@ export function TearSheetPanel({
                 min="1"
                 value={fastPeriod}
                 onChange={(e) => setFastPeriod(Number(e.target.value))}
+                className="form-control"
               />
             </div>
             <div className="control-group">
@@ -210,6 +212,7 @@ export function TearSheetPanel({
                 min="2"
                 value={slowPeriod}
                 onChange={(e) => setSlowPeriod(Number(e.target.value))}
+                className="form-control"
               />
             </div>
           </>
@@ -224,6 +227,7 @@ export function TearSheetPanel({
                 min="2"
                 value={rsiPeriod}
                 onChange={(e) => setRsiPeriod(Number(e.target.value))}
+                className="form-control"
               />
             </div>
             <div className="control-group">
@@ -233,12 +237,14 @@ export function TearSheetPanel({
                   type="number"
                   value={rsiOversold}
                   onChange={(e) => setRsiOversold(Number(e.target.value))}
+                  className="form-control"
                   style={{ width: '50%' }}
                 />
                 <input
                   type="number"
                   value={rsiOverbought}
                   onChange={(e) => setRsiOverbought(Number(e.target.value))}
+                  className="form-control"
                   style={{ width: '50%' }}
                 />
               </div>
@@ -255,6 +261,7 @@ export function TearSheetPanel({
                 min="2"
                 value={bbPeriod}
                 onChange={(e) => setBbPeriod(Number(e.target.value))}
+                className="form-control"
               />
             </div>
             <div className="control-group">
@@ -265,6 +272,7 @@ export function TearSheetPanel({
                 min="0.1"
                 value={bbStdDev}
                 onChange={(e) => setBbStdDev(Number(e.target.value))}
+                className="form-control"
               />
             </div>
           </>
@@ -279,6 +287,7 @@ export function TearSheetPanel({
             max="0.2"
             value={riskFreeRate}
             onChange={(e) => setRiskFreeRate(Number(e.target.value))}
+            className="form-control"
           />
         </div>
 

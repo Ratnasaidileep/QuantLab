@@ -327,14 +327,8 @@ export function BasketPanel({
                   value={batchPeriod}
                   onChange={(e) => setBatchPeriod(e.target.value)}
                   disabled={isBatchIngesting}
-                  style={{
-                    padding: '0.4rem',
-                    borderRadius: '4px',
-                    border: '1px solid var(--border-color)',
-                    background: 'var(--bg-primary)',
-                    color: 'var(--text-primary)',
-                    fontSize: '0.85rem',
-                  }}
+                  className="form-control form-control-sm"
+                  style={{ width: 'auto' }}
                 >
                   <option value="1y">1y</option>
                   <option value="2y">2y</option>

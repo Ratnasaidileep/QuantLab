@@ -890,3 +890,15 @@ The QuantLab frontend has been fully redesigned and modernized into a terminal-g
   - Child-route active indicators that highlight parent menus when sub-tools are active.
   - Mobile responsiveness: Collapses gracefully into a sliding drawer on viewports $< 900\text{px}$ via a hamburger toggle.
 - **Top-Right Profile Avatar Dropdown:** Circular avatar button with user initials and username, opening an accessible dropdown displaying user identity (`ID #${currentUser.id} • Researcher`), direct links to `Profile & History` and `Settings`, and a `Sign Out` action that clears sessions and redirects to the public landing page.
+
+### 11.7 Standardized Institutional Dropdown and Select Styling (Implemented October 2026)
+- **Unified Form Control Design System (`.form-control`, `select.form-control`):** Replaced inconsistent browser default controls with standardized institutional styling matching the Portfolio Basket design.
+- **Attributes & Theming:**
+  - Dark navy background (`var(--bg-input)`: `#141d2c`) and white selected text (`var(--text-main)`: `#f8fafc`).
+  - Subtle blue-grey borders (`var(--border-subtle)`: `#2d3c52`) with 8px rounded corners.
+  - Custom SVG dropdown chevron arrow positioned at `right 0.75rem center` with `appearance: none;`.
+  - Accessible focus ring with cyan glow (`border-color: var(--accent-cyan); box-shadow: var(--focus-ring);`).
+  - Dark option list popups enforced across browsers via `color-scheme: dark;` and `option { background-color: var(--bg-card); color: var(--text-main); }`.
+  - Compact modifier (`.form-control-sm`) for inline headers and dataset selection toolbars.
+- **Components Standardized:** `TearSheetPanel.tsx` (Strategy dropdown and parameter inputs), `AnalyticsPage.tsx` (Dataset selector), `MonteCarloPanel.tsx` (Strategy, simulations, ruin threshold, resampling mode), `BasketPanel.tsx`, `HeatmapPage.tsx`, and `WalkForwardPage.tsx`.
+
