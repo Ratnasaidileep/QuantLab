@@ -2,13 +2,19 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 
+from quantlab.analytics.monte_carlo import run_monte_carlo_simulation
 from quantlab.analytics.tear_sheet import generate_tear_sheet
 from quantlab.analytics.walk_forward import (
     evaluate_parameter_grid_heatmap,
     run_walk_forward_optimization,
 )
 from quantlab.api.schemas import (
+    DrawdownHistogramBinDTO,
     MetricsDTO,
+    MonteCarloPointDTO,
+    MonteCarloRequest,
+    MonteCarloResponse,
+    MonteCarloSummaryDTO,
     MonthlyReturnRowDTO,
     ParameterGridPointDTO,
     ParameterHeatmapRequest,
@@ -350,3 +356,164 @@ def generate_tear_sheet_report(request: TearSheetRequest) -> TearSheetResponse:
         monthly_matrix=monthly_dto,
         underwater_curve=underwater_dto,
     )
+
+
+@router.post("/monte-carlo", response_model=MonteCarloResponse)
+def monte_carlo_analysis(request: MonteCarloRequest) -> MonteCarloResponse:
+    """Execute Monte Carlo simulation over backtest trade history."""
+    dataset_name = Path(request.dataset).name
+    file_path = DATA_DIR / dataset_name
+
+    if not file_path.exists() or not file_path.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Dataset '{dataset_name}' not found.",
+        )
+
+    try:
+        bars = load_bars_from_csv(file_path)
+    except Exception as error:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to load dataset: {error}",
+        ) from error
+
+    if not bars:
+        raise HTTPException(
+            status_code=400,
+            detail="The dataset contains no usable market bars.",
+        )
+
+    if request.strategy == StrategyType.MOVING_AVERAGE:
+        strategy = MovingAverageCrossover(
+            fast_period=request.fast_period,
+            slow_period=request.slow_period,
+        )
+        use_crossover = True
+        strategy_name = "Moving Average Crossover"
+        configuration = f"Fast {request.fast_period} / Slow {request.slow_period}"
+    elif request.strategy == StrategyType.RSI:
+        strategy = RSIStrategy(
+            period=request.rsi_period,
+            oversold=request.oversold,
+            overbought=request.overbought,
+        )
+        use_crossover = False
+        strategy_name = "RSI"
+        configuration = (
+            f"Period {request.rsi_period} / "
+            f"Oversold {request.oversold:g} / "
+            f"Overbought {request.overbought:g}"
+        )
+    elif request.strategy == StrategyType.BOLLINGER:
+        strategy = BollingerBandsStrategy(
+            period=request.bb_period,
+            std_dev_multiplier=request.bb_std_dev,
+        )
+        use_crossover = False
+        strategy_name = "Bollinger Bands"
+        configuration = (
+            f"Period {request.bb_period} / StdDev {request.bb_std_dev:g}"
+        )
+    elif request.strategy == StrategyType.MACD:
+        strategy = MACDStrategy(
+            fast_period=request.macd_fast,
+            slow_period=request.macd_slow,
+            signal_period=request.macd_signal,
+        )
+        use_crossover = True
+        strategy_name = "MACD"
+        configuration = (
+            f"Fast {request.macd_fast} / Slow {request.macd_slow} / Signal {request.macd_signal}"
+        )
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported strategy '{request.strategy}'.",
+        )
+
+    try:
+        backtest = Backtest(
+            initial_cash=request.initial_cash,
+            strategy=strategy,
+            commission_rate=request.commission_rate,
+            slippage_rate=request.slippage_rate,
+            use_crossover=use_crossover,
+            sizing_mode=request.sizing_mode.value,
+            quantity_per_trade=request.quantity_per_trade,
+            stop_loss_pct=request.stop_loss_pct,
+            take_profit_pct=request.take_profit_pct,
+            trailing_stop_pct=request.trailing_stop_pct,
+        )
+        result = backtest.run(bars)
+    except Exception as error:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Backtest simulation failed: {error}",
+        ) from error
+
+    try:
+        mc_result = run_monte_carlo_simulation(
+            initial_cash=request.initial_cash,
+            trades=result.trades,
+            num_simulations=request.num_simulations,
+            ruin_drawdown_pct=request.ruin_drawdown_pct,
+            mode=request.mode.value,
+            seed=request.seed,
+        )
+    except ValueError as val_err:
+        raise HTTPException(
+            status_code=400,
+            detail=str(val_err),
+        ) from val_err
+    except Exception as error:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Monte Carlo simulation failed: {error}",
+        ) from error
+
+    summary_dto = MonteCarloSummaryDTO(
+        simulations_count=mc_result.summary.simulations_count,
+        trades_resampled=mc_result.summary.trades_resampled,
+        ruin_threshold=mc_result.summary.ruin_threshold,
+        probability_of_ruin=mc_result.summary.probability_of_ruin,
+        median_max_drawdown=mc_result.summary.median_max_drawdown,
+        p95_max_drawdown=mc_result.summary.p95_max_drawdown,
+        p5_max_drawdown=mc_result.summary.p5_max_drawdown,
+        median_terminal_equity=mc_result.summary.median_terminal_equity,
+        p5_terminal_equity=mc_result.summary.p5_terminal_equity,
+        p95_terminal_equity=mc_result.summary.p95_terminal_equity,
+    )
+
+    cone_dto = [
+        MonteCarloPointDTO(
+            step=pt.step,
+            p5=pt.p5,
+            p25=pt.p25,
+            p50=pt.p50,
+            p75=pt.p75,
+            p95=pt.p95,
+        )
+        for pt in mc_result.confidence_cone
+    ]
+
+    hist_dto = [
+        DrawdownHistogramBinDTO(
+            bin_start=b.bin_start,
+            bin_end=b.bin_end,
+            count=b.count,
+            percentage=b.percentage,
+        )
+        for b in mc_result.drawdown_histogram
+    ]
+
+    return MonteCarloResponse(
+        strategy_name=strategy_name,
+        configuration=configuration,
+        dataset=dataset_name,
+        initial_cash=request.initial_cash,
+        summary=summary_dto,
+        confidence_cone=cone_dto,
+        drawdown_histogram=hist_dto,
+    )
+

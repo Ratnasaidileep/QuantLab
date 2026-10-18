@@ -10,6 +10,8 @@ import type {
   DatasetUploadResponse,
   ExperimentDetailDTO,
   ExperimentListResponse,
+  MonteCarloRequest,
+  MonteCarloResponse,
   ParameterHeatmapRequest,
   ParameterHeatmapResponse,
   SaveExperimentRequest,
@@ -253,6 +255,33 @@ export async function executeParameterHeatmap(
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
     let message = 'Parameter Heatmap execution failed.';
+    if (errorData.detail) {
+      if (typeof errorData.detail === 'string') {
+        message = errorData.detail;
+      } else if (Array.isArray(errorData.detail)) {
+        message = errorData.detail.map((e: { msg?: string }) => e.msg || '').join('; ');
+      }
+    }
+    throw new Error(message);
+  }
+
+  return response.json();
+}
+
+export async function runMonteCarloSimulation(
+  request: MonteCarloRequest,
+): Promise<MonteCarloResponse> {
+  const response = await fetch(`${API_BASE}/analytics/monte-carlo`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    let message = 'Monte Carlo simulation failed.';
     if (errorData.detail) {
       if (typeof errorData.detail === 'string') {
         message = errorData.detail;

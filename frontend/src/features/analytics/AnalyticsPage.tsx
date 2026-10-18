@@ -1,11 +1,14 @@
+import { useState } from 'react';
 import { useBacktest } from '../../hooks/useBacktest';
 import { TearSheetPanel } from '../../components/TearSheetPanel';
+import { MonteCarloPanel } from '../../components/MonteCarloPanel';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
-import { BarChart3, ShieldAlert, Database } from 'lucide-react';
+import { BarChart3, ShieldAlert, Database, Dice5 } from 'lucide-react';
 
 export function AnalyticsPage() {
   const { config, setConfig, datasets } = useBacktest();
+  const [activeTab, setActiveTab] = useState<'tear_sheet' | 'monte_carlo'>('tear_sheet');
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
@@ -23,13 +26,21 @@ export function AnalyticsPage() {
       >
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <BarChart3 size={22} style={{ color: 'var(--accent-primary)' }} />
+            {activeTab === 'tear_sheet' ? (
+              <BarChart3 size={22} style={{ color: 'var(--accent-primary)' }} />
+            ) : (
+              <Dice5 size={22} style={{ color: 'var(--accent-primary)' }} />
+            )}
             <h1 style={{ fontSize: '1.4rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
-              Risk Tear-Sheet & Tail Risk Analytics
+              {activeTab === 'tear_sheet'
+                ? 'Risk Tear-Sheet & Tail Risk Analytics'
+                : 'Monte Carlo Simulation & Confidence Bands'}
             </h1>
           </div>
           <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: '0.25rem 0 0 0' }}>
-            PyFolio-grade risk diagnostics: Historical & Parametric VaR, Expected Shortfall (CVaR), Skewness, Kurtosis, and monthly calendar matrices.
+            {activeTab === 'tear_sheet'
+              ? 'PyFolio-grade risk diagnostics: Historical & Parametric VaR, Expected Shortfall (CVaR), Skewness, Kurtosis, and monthly calendar matrices.'
+              : 'Resample trade sequences up to 3,000 synthetic paths to diagnose sequence risk, probability of ruin, and percentile confidence cones.'}
           </p>
         </div>
 
@@ -66,6 +77,63 @@ export function AnalyticsPage() {
         </div>
       </div>
 
+      {/* Segmented Sub-Tab Switcher */}
+      <div
+        style={{
+          display: 'flex',
+          gap: '0.5rem',
+          padding: '0.25rem',
+          borderRadius: '8px',
+          backgroundColor: 'var(--bg-card)',
+          border: '1px solid var(--border-color)',
+          width: 'fit-content',
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => setActiveTab('tear_sheet')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.4rem',
+            padding: '0.45rem 0.9rem',
+            borderRadius: '6px',
+            fontSize: '0.82rem',
+            fontWeight: activeTab === 'tear_sheet' ? 600 : 500,
+            border: 'none',
+            cursor: 'pointer',
+            backgroundColor: activeTab === 'tear_sheet' ? 'rgba(56, 189, 248, 0.15)' : 'transparent',
+            color: activeTab === 'tear_sheet' ? 'var(--accent-primary)' : 'var(--text-secondary)',
+            transition: 'all var(--transition-fast)',
+          }}
+        >
+          <BarChart3 size={15} />
+          <span>Tail Risk Tear-Sheet</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('monte_carlo')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.4rem',
+            padding: '0.45rem 0.9rem',
+            borderRadius: '6px',
+            fontSize: '0.82rem',
+            fontWeight: activeTab === 'monte_carlo' ? 600 : 500,
+            border: 'none',
+            cursor: 'pointer',
+            backgroundColor: activeTab === 'monte_carlo' ? 'rgba(56, 189, 248, 0.15)' : 'transparent',
+            color: activeTab === 'monte_carlo' ? 'var(--accent-primary)' : 'var(--text-secondary)',
+            transition: 'all var(--transition-fast)',
+          }}
+        >
+          <Dice5 size={15} />
+          <span>Monte Carlo Simulation</span>
+        </button>
+      </div>
+
       {/* Methodology Context Card */}
       <div
         style={{
@@ -83,22 +151,43 @@ export function AnalyticsPage() {
       >
         <ShieldAlert size={18} style={{ color: 'var(--accent-primary)', flexShrink: 0 }} />
         <div>
-          <strong style={{ color: 'var(--text-primary)' }}>Risk Philosophy: </strong>
-          Standard deviation alone assumes Gaussian normality. QuantLab evaluates <strong>fat-tailed distributions</strong> using 95% and 99% Expected Shortfall (CVaR), capturing catastrophic drawdowns where conventional models fail.
+          {activeTab === 'tear_sheet' ? (
+            <>
+              <strong style={{ color: 'var(--text-primary)' }}>Risk Philosophy: </strong>
+              Standard deviation alone assumes Gaussian normality. QuantLab evaluates <strong>fat-tailed distributions</strong> using 95% and 99% Expected Shortfall (CVaR), capturing catastrophic drawdowns where conventional models fail.
+            </>
+          ) : (
+            <>
+              <strong style={{ color: 'var(--text-primary)' }}>Sequence Risk Philosophy: </strong>
+              A backtest only samples one historical ordering of trades. Monte Carlo simulation shuffles and resamples trades over <strong>1,000+ synthetic paths</strong> to ensure your Sharpe ratio isn't merely the byproduct of a fortunate trade order.
+            </>
+          )}
         </div>
       </div>
 
-      {/* Main Tear-Sheet Workspace */}
+      {/* Active Tab Workspace */}
       <Card style={{ padding: '1rem', backgroundColor: 'var(--bg-card)' }}>
-        <TearSheetPanel
-          dataset={config.dataset}
-          initialCash={config.initial_cash}
-          commissionRate={config.commission_rate}
-          slippageRate={config.slippage_rate}
-          sizingMode={config.sizing_mode}
-          quantityPerTrade={config.quantity_per_trade}
-        />
+        {activeTab === 'tear_sheet' ? (
+          <TearSheetPanel
+            dataset={config.dataset}
+            initialCash={config.initial_cash}
+            commissionRate={config.commission_rate}
+            slippageRate={config.slippage_rate}
+            sizingMode={config.sizing_mode}
+            quantityPerTrade={config.quantity_per_trade}
+          />
+        ) : (
+          <MonteCarloPanel
+            dataset={config.dataset}
+            initialCash={config.initial_cash}
+            commissionRate={config.commission_rate}
+            slippageRate={config.slippage_rate}
+            sizingMode={config.sizing_mode}
+            quantityPerTrade={config.quantity_per_trade}
+          />
+        )}
       </Card>
     </div>
   );
 }
+

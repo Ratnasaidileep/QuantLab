@@ -708,3 +708,63 @@ class AuthResponse(BaseModel):
     user: UserDTO
 
 
+class MonteCarloModeEnum(str, Enum):
+    TRADE_SHUFFLE = "trade_shuffle"
+    BOOTSTRAP = "bootstrap"
+
+
+class MonteCarloPointDTO(BaseModel):
+    step: int
+    p5: float
+    p25: float
+    p50: float
+    p75: float
+    p95: float
+
+
+class DrawdownHistogramBinDTO(BaseModel):
+    bin_start: float
+    bin_end: float
+    count: int
+    percentage: float
+
+
+class MonteCarloSummaryDTO(BaseModel):
+    simulations_count: int
+    trades_resampled: int
+    ruin_threshold: float
+    probability_of_ruin: float
+    median_max_drawdown: float
+    p95_max_drawdown: float
+    p5_max_drawdown: float
+    median_terminal_equity: float
+    p5_terminal_equity: float
+    p95_terminal_equity: float
+
+
+class MonteCarloRequest(BacktestRequest):
+    num_simulations: int = Field(
+        default=1000, ge=10, le=10000, description="Number of Monte Carlo simulations."
+    )
+    ruin_drawdown_pct: float = Field(
+        default=0.25, gt=0.0, lt=1.0, description="Drawdown threshold to define portfolio ruin."
+    )
+    mode: MonteCarloModeEnum = Field(
+        default=MonteCarloModeEnum.TRADE_SHUFFLE,
+        description="Resampling mode: trade_shuffle (permutation) or bootstrap.",
+    )
+    seed: int | None = Field(
+        default=None, description="Optional seed for deterministic reproducibility."
+    )
+
+
+class MonteCarloResponse(BaseModel):
+    strategy_name: str
+    configuration: str
+    dataset: str
+    initial_cash: float
+    summary: MonteCarloSummaryDTO
+    confidence_cone: list[MonteCarloPointDTO]
+    drawdown_histogram: list[DrawdownHistogramBinDTO]
+
+

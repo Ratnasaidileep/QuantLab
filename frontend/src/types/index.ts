@@ -373,4 +373,52 @@ export interface RegisterRequest {
   password: string;
 }
 
+export type MonteCarloMode = 'trade_shuffle' | 'bootstrap';
+
+export interface MonteCarloPointDTO {
+  step: number;
+  p5: number;
+  p25: number;
+  p50: number;
+  p75: number;
+  p95: number;
+}
+
+export interface DrawdownHistogramBinDTO {
+  bin_start: number;
+  bin_end: number;
+  count: number;
+  percentage: number;
+}
+
+export interface MonteCarloSummaryDTO {
+  simulations_count: number;
+  trades_resampled: number;
+  ruin_threshold: number;
+  probability_of_ruin: number;
+  median_max_drawdown: number;
+  p95_max_drawdown: number;
+  p5_max_drawdown: number;
+  median_terminal_equity: number;
+  p5_terminal_equity: number;
+  p95_terminal_equity: number;
+}
+
+export interface MonteCarloRequest extends BacktestRequest {
+  num_simulations?: number;
+  ruin_drawdown_pct?: number;
+  mode?: MonteCarloMode;
+  seed?: number;
+}
+
+export interface MonteCarloResponse {
+  strategy_name: string;
+  configuration: string;
+  dataset: string;
+  initial_cash: number;
+  summary: MonteCarloSummaryDTO;
+  confidence_cone: MonteCarloPointDTO[];
+  drawdown_histogram: DrawdownHistogramBinDTO[];
+}
+
 

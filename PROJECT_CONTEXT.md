@@ -867,3 +867,16 @@ The QuantLab frontend has been fully redesigned and modernized into a terminal-g
 - **User Profile & Research Workspace (`/profile`):** Comprehensive user profile page displaying account details, user ID, member registration date, session state, and SQLite storage indicators. Includes an interactive KPI scorecard (total saved experiments, win rate %, best net return, highest Sharpe ratio) and a personal research history table with "Restore into Strategy Lab", "Inspect", and "Delete" actions.
 - **Institutional Terminal Design Theme:** Pure CSS color tokens styled in accordance with Option 1: Institutional Terminal (Obsidian `#090d16` canvas, Midnight `#111827` cards, Electric Cyan `#38bdf8` accent, Mint Emerald `#10b981` profit, Crimson Coral `#ef4444` loss, Amber `#f59e0b` benchmark).
 
+### 11.5 Monte Carlo Simulation & Confidence Bands Suite (Implemented October 2026)
+- **Mathematical Engine (`src/quantlab/analytics/monte_carlo.py`):** High-performance vectorized NumPy resampling engine supporting two modes:
+  1. *Trade Shuffling (Permutation Test)*: Reorders empirical trade PnLs to evaluate sequence risk and path dependency.
+  2. *Bootstrap Resampling*: Samples empirical trade outcomes with replacement to quantify distribution variance.
+- **Analytical Metrics & Outputs:**
+  - *Percentile Confidence Cone*: Computes 5th, 25th, 50th (median), 75th, and 95th percentiles of cumulative portfolio equity across all simulated steps.
+  - *Risk of Ruin (Probability of Ruin)*: Quantifies the probability that simulated max drawdown exceeds a user-configured threshold (default 25%, configurable 10%–50%).
+  - *Maximum Drawdown Distribution*: 10-bin frequency histogram highlighting paths that violate the ruin boundary.
+  - *Terminal Capital Confidence Range*: 5th percentile worst-case wealth vs median vs 95th percentile top-case.
+- **API Endpoint (`/api/v1/analytics/monte-carlo`):** REST endpoint returning structured summary statistics, confidence cone points, and drawdown histogram bins.
+- **Frontend Workstation (`MonteCarloPanel.tsx` & `AnalyticsPage.tsx`):** Dual-tab interface on `/analytics` toggling between the PyFolio Risk Tear-Sheet and the interactive Monte Carlo simulation suite, featuring simulation sliders, SVG multi-band cone chart with interactive crosshair, drawdown distribution histogram, ruin risk scorecard, and academic quantitative commentary.
+- **Test Coverage:** Full test coverage in `tests/test_monte_carlo.py` verifying seed determinism, percentile monotonicity ($P_5 \le P_{25} \le P_{50} \le P_{75} \le P_{95}$), and ruin probability bounds. Total automated suite reports **197 passing tests**.
+
