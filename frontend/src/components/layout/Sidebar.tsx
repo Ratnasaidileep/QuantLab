@@ -96,7 +96,7 @@ export function Sidebar({
           }}
         >
           <NavLink
-            to="/"
+            to="/dashboard"
             onClick={onCloseMobile}
             style={{
               display: 'flex',

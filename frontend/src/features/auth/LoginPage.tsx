@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Lock, User, AlertCircle } from 'lucide-react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Eye, EyeOff, Lock, User, AlertCircle, ArrowLeft } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { loginUser } from '../../api/client';
 import { Card } from '../../components/ui/Card';
@@ -8,6 +8,7 @@ import { Button } from '../../components/ui/Button';
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login, isAuthenticated } = useAuth();
 
   const [username, setUsername] = useState('');
@@ -40,7 +41,9 @@ export function LoginPage() {
     try {
       const res = await loginUser(cleanUser, password);
       login(res.access_token, res.user);
-      navigate('/dashboard');
+      const destination =
+        (location.state as { from?: { pathname?: string } })?.from?.pathname || '/dashboard';
+      navigate(destination, { replace: true });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Sign in failed.';
       setError(msg);
@@ -55,8 +58,8 @@ export function LoginPage() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        minHeight: '70vh',
-        padding: '1rem',
+        flex: 1,
+        padding: '2.5rem 1rem',
       }}
     >
       <Card
@@ -66,6 +69,8 @@ export function LoginPage() {
           maxWidth: '420px',
           padding: '2rem',
           boxShadow: 'var(--shadow-lg)',
+          backgroundColor: 'var(--bg-card)',
+          border: '1px solid var(--border-color)',
         }}
       >
         <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
@@ -115,66 +120,84 @@ export function LoginPage() {
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div>
-            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>
+            <label
+              htmlFor="login-username"
+              style={{ display: 'block', fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}
+            >
               Username
             </label>
             <div style={{ position: 'relative' }}>
-              <User
-                size={16}
-                style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }}
-              />
               <input
+                id="login-username"
                 type="text"
+                autoComplete="username"
+                placeholder="Enter username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="e.g. quant_researcher"
-                required
                 disabled={isLoading}
+                required
                 style={{
                   width: '100%',
-                  padding: '0.55rem 0.75rem 0.55rem 2.25rem',
+                  padding: '0.6rem 0.75rem 0.6rem 2.25rem',
+                  fontSize: '0.875rem',
                   borderRadius: '6px',
                   border: '1px solid var(--border-color)',
-                  backgroundColor: 'var(--bg-elevated)',
-                  color: 'var(--text-primary)',
-                  fontSize: '0.875rem',
+                  backgroundColor: 'var(--bg-input)',
+                  color: 'var(--text-main)',
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                }}
+              />
+              <User
+                size={16}
+                style={{
+                  position: 'absolute',
+                  left: '0.75rem',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: 'var(--text-muted)',
                 }}
               />
             </div>
           </div>
 
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-              <label style={{ fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-secondary)' }}>
-                Password
-              </label>
-              <span
-                style={{ fontSize: '0.75rem', color: 'var(--text-muted)', cursor: 'not-allowed' }}
-                title="Password recovery is currently unavailable (requires mail server integration)"
-              >
-                Forgot password? (Unavailable)
-              </span>
-            </div>
+            <label
+              htmlFor="login-password"
+              style={{ display: 'block', fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}
+            >
+              Password
+            </label>
             <div style={{ position: 'relative' }}>
-              <Lock
-                size={16}
-                style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }}
-              />
               <input
+                id="login-password"
                 type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
+                placeholder="Enter password (min 6 chars)"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                required
                 disabled={isLoading}
+                required
                 style={{
                   width: '100%',
-                  padding: '0.55rem 2.25rem 0.55rem 2.25rem',
+                  padding: '0.6rem 2.5rem 0.6rem 2.25rem',
+                  fontSize: '0.875rem',
                   borderRadius: '6px',
                   border: '1px solid var(--border-color)',
-                  backgroundColor: 'var(--bg-elevated)',
-                  color: 'var(--text-primary)',
-                  fontSize: '0.875rem',
+                  backgroundColor: 'var(--bg-input)',
+                  color: 'var(--text-main)',
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                }}
+              />
+              <Lock
+                size={16}
+                style={{
+                  position: 'absolute',
+                  left: '0.75rem',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: 'var(--text-muted)',
                 }}
               />
               <button
@@ -188,6 +211,10 @@ export function LoginPage() {
                   color: 'var(--text-muted)',
                   display: 'flex',
                   alignItems: 'center',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: 0,
                 }}
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
               >
@@ -215,18 +242,20 @@ export function LoginPage() {
           </Link>
         </div>
 
-        <div style={{ marginTop: '1rem', textAlign: 'center' }}>
+        <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)', textAlign: 'center' }}>
           <Link
-            to="/dashboard"
+            to="/"
             style={{
               display: 'inline-flex',
               alignItems: 'center',
               gap: '0.35rem',
               fontSize: '0.78rem',
               color: 'var(--text-muted)',
+              textDecoration: 'none',
             }}
           >
-            <span>Continue as Guest &rarr;</span>
+            <ArrowLeft size={13} />
+            <span>Back to Platform Overview</span>
           </Link>
         </div>
       </Card>

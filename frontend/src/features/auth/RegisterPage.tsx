@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Lock, User, AlertCircle, UserPlus } from 'lucide-react';
+import { Eye, EyeOff, Lock, User, AlertCircle, ArrowLeft, UserPlus } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import { registerUser } from '../../api/client';
 import { Card } from '../../components/ui/Card';
@@ -45,7 +45,7 @@ export function RegisterPage() {
     try {
       const res = await registerUser(cleanUser, password);
       login(res.access_token, res.user);
-      navigate('/dashboard');
+      navigate('/dashboard', { replace: true });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Registration failed.';
       setError(msg);
@@ -60,8 +60,8 @@ export function RegisterPage() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        minHeight: '70vh',
-        padding: '1rem',
+        flex: 1,
+        padding: '2.5rem 1rem',
       }}
     >
       <Card
@@ -71,6 +71,8 @@ export function RegisterPage() {
           maxWidth: '420px',
           padding: '2rem',
           boxShadow: 'var(--shadow-lg)',
+          backgroundColor: 'var(--bg-card)',
+          border: '1px solid var(--border-color)',
         }}
       >
         <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
@@ -94,7 +96,7 @@ export function RegisterPage() {
             Create QuantLab Account
           </h1>
           <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
-            Get your own isolated quantitative research workspace
+            Initialize an isolated personal quantitative research workspace
           </p>
         </div>
 
@@ -120,58 +122,84 @@ export function RegisterPage() {
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div>
-            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>
-              Username *
+            <label
+              htmlFor="register-username"
+              style={{ display: 'block', fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}
+            >
+              Username
             </label>
             <div style={{ position: 'relative' }}>
-              <User
-                size={16}
-                style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }}
-              />
               <input
+                id="register-username"
                 type="text"
+                autoComplete="username"
+                placeholder="Choose username (min 3 chars)"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="Minimum 3 characters"
-                required
                 disabled={isLoading}
+                required
                 style={{
                   width: '100%',
-                  padding: '0.55rem 0.75rem 0.55rem 2.25rem',
+                  padding: '0.6rem 0.75rem 0.6rem 2.25rem',
+                  fontSize: '0.875rem',
                   borderRadius: '6px',
                   border: '1px solid var(--border-color)',
-                  backgroundColor: 'var(--bg-elevated)',
-                  color: 'var(--text-primary)',
-                  fontSize: '0.875rem',
+                  backgroundColor: 'var(--bg-input)',
+                  color: 'var(--text-main)',
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                }}
+              />
+              <User
+                size={16}
+                style={{
+                  position: 'absolute',
+                  left: '0.75rem',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: 'var(--text-muted)',
                 }}
               />
             </div>
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>
-              Password (Min 6 characters) *
+            <label
+              htmlFor="register-password"
+              style={{ display: 'block', fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}
+            >
+              Password
             </label>
             <div style={{ position: 'relative' }}>
-              <Lock
-                size={16}
-                style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }}
-              />
               <input
+                id="register-password"
                 type={showPassword ? 'text' : 'password'}
+                autoComplete="new-password"
+                placeholder="Create password (min 6 chars)"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                required
                 disabled={isLoading}
+                required
                 style={{
                   width: '100%',
-                  padding: '0.55rem 2.25rem 0.55rem 2.25rem',
+                  padding: '0.6rem 2.5rem 0.6rem 2.25rem',
+                  fontSize: '0.875rem',
                   borderRadius: '6px',
                   border: '1px solid var(--border-color)',
-                  backgroundColor: 'var(--bg-elevated)',
-                  color: 'var(--text-primary)',
-                  fontSize: '0.875rem',
+                  backgroundColor: 'var(--bg-input)',
+                  color: 'var(--text-main)',
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                }}
+              />
+              <Lock
+                size={16}
+                style={{
+                  position: 'absolute',
+                  left: '0.75rem',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: 'var(--text-muted)',
                 }}
               />
               <button
@@ -185,6 +213,10 @@ export function RegisterPage() {
                   color: 'var(--text-muted)',
                   display: 'flex',
                   alignItems: 'center',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: 0,
                 }}
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
               >
@@ -194,29 +226,42 @@ export function RegisterPage() {
           </div>
 
           <div>
-            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>
-              Confirm Password *
+            <label
+              htmlFor="register-confirm-password"
+              style={{ display: 'block', fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '0.35rem' }}
+            >
+              Confirm Password
             </label>
             <div style={{ position: 'relative' }}>
-              <Lock
-                size={16}
-                style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }}
-              />
               <input
+                id="register-confirm-password"
                 type={showPassword ? 'text' : 'password'}
+                autoComplete="new-password"
+                placeholder="Confirm password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="••••••••"
-                required
                 disabled={isLoading}
+                required
                 style={{
                   width: '100%',
-                  padding: '0.55rem 0.75rem 0.55rem 2.25rem',
+                  padding: '0.6rem 0.75rem 0.6rem 2.25rem',
+                  fontSize: '0.875rem',
                   borderRadius: '6px',
                   border: '1px solid var(--border-color)',
-                  backgroundColor: 'var(--bg-elevated)',
-                  color: 'var(--text-primary)',
-                  fontSize: '0.875rem',
+                  backgroundColor: 'var(--bg-input)',
+                  color: 'var(--text-main)',
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                }}
+              />
+              <Lock
+                size={16}
+                style={{
+                  position: 'absolute',
+                  left: '0.75rem',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: 'var(--text-muted)',
                 }}
               />
             </div>
@@ -241,18 +286,20 @@ export function RegisterPage() {
           </Link>
         </div>
 
-        <div style={{ marginTop: '1rem', textAlign: 'center' }}>
+        <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)', textAlign: 'center' }}>
           <Link
-            to="/dashboard"
+            to="/"
             style={{
               display: 'inline-flex',
               alignItems: 'center',
               gap: '0.35rem',
               fontSize: '0.78rem',
               color: 'var(--text-muted)',
+              textDecoration: 'none',
             }}
           >
-            <span>Continue as Guest &rarr;</span>
+            <ArrowLeft size={13} />
+            <span>Back to Platform Overview</span>
           </Link>
         </div>
       </Card>

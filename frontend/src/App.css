@@ -1220,8 +1220,20 @@
 
 
 
-/* Sidebar and Header Mobile Responsive Rules */
+/* Primary Navigation & Mobile Responsive Rules */
+@media (min-width: 901px) {
+  /* On desktop, the compact top navigation bar is the single primary navigation system */
+  .quantlab-sidebar {
+    display: none !important;
+  }
+}
+
 @media (max-width: 900px) {
+  /* On mobile/tablet, hide top navbar links to prevent overflow, show hamburger button */
+  .top-navbar-links {
+    display: none !important;
+  }
+
   .mobile-hamburger-btn {
     display: inline-flex !important;
   }
@@ -1231,6 +1243,7 @@
   }
 
   .quantlab-sidebar {
+    display: flex !important;
     position: fixed !important;
     left: 0 !important;
     top: 0 !important;
@@ -1244,3 +1257,11 @@
     transform: translateX(0) !important;
   }
 }
+
+/* Accessible focus states for navigation */
+.top-navbar-links button:focus-visible,
+.top-navbar-links a:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+

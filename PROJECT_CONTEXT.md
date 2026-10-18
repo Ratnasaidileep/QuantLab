@@ -877,6 +877,16 @@ The QuantLab frontend has been fully redesigned and modernized into a terminal-g
   - *Maximum Drawdown Distribution*: 10-bin frequency histogram highlighting paths that violate the ruin boundary.
   - *Terminal Capital Confidence Range*: 5th percentile worst-case wealth vs median vs 95th percentile top-case.
 - **API Endpoint (`/api/v1/analytics/monte-carlo`):** REST endpoint returning structured summary statistics, confidence cone points, and drawdown histogram bins.
-- **Frontend Workstation (`MonteCarloPanel.tsx` & `AnalyticsPage.tsx`):** Dual-tab interface on `/analytics` toggling between the PyFolio Risk Tear-Sheet and the interactive Monte Carlo simulation suite, featuring simulation sliders, SVG multi-band cone chart with interactive crosshair, drawdown distribution histogram, ruin risk scorecard, and academic quantitative commentary.
-- **Test Coverage:** Full test coverage in `tests/test_monte_carlo.py` verifying seed determinism, percentile monotonicity ($P_5 \le P_{25} \le P_{50} \le P_{75} \le P_{95}$), and ruin probability bounds. Total automated suite reports **197 passing tests**.
-
+### 11.6 Corrected Website Flow, Public Landing Page, Protected Routes, and Consolidated Navigation (Implemented October 2026)
+- **Architectural Flow Decoupling:** Replaced the previous monolithic layout wrapper with a clean architectural separation between public landing/auth experiences (`PublicLayout`) and the authenticated research workspace (`AppLayout` wrapped inside `ProtectedRoute`).
+- **Public Landing Page (`/`):** Clean SaaS landing page for unauthenticated visitors featuring institutional dark navy & cyan branding, 4 quantitative platform highlights (Zero Look-Ahead Bias, PyFolio Risk Analytics, Monte Carlo Resampling, Walk-Forward Optimization), architecture badges (Vectorized NumPy, FastAPI, SQLite Isolated), and prominent "Sign In" and "Create Account" calls to action. Completely free of the private research sidebar, breadcrumbs, and unauthenticated data leaks.
+- **Dedicated Auth Experience (`/login`, `/register`):** Distraction-free authentication cards with responsive, naturally scrolling containers that prevent bottom clipping on laptop screens ($1366 \times 768$ and $1280 \times 720$). Removed fake password recovery text, preserved existing backend validation contracts, and added return-path redirection (`location.state.from`).
+- **Protected Route Guards (`ProtectedRoute`):** Guards all authenticated research routes (`/dashboard`, `/strategy-lab`, `/analytics`, `/portfolio`, `/walk-forward`, `/heatmap`, `/datasets`, `/experiments`, `/profile`, `/settings`). Automatically redirects unauthenticated requests to `/login` with preserved destination state while validating JWT tokens against `/api/v1/auth/me`.
+- **Consolidated Hover-Enabled Top Navigation:** Eliminated duplicate navigation between the top bar and sidebar. Implemented a compact top navigation bar with:
+  - Primary destinations: `Dashboard`, `Strategy Lab`, and `Analytics (Risk Tear-Sheet)`.
+  - Grouped accessible dropdown menus with hover, click/tap, and keyboard (`Escape`, `Enter`, `Space`) interaction:
+    - *Optimization*: `Portfolio Basket`, `Walk-Forward`, `Parameter Heatmap`.
+    - *Data & Records*: `Dataset Library`, `Saved Experiments`.
+  - Child-route active indicators that highlight parent menus when sub-tools are active.
+  - Mobile responsiveness: Collapses gracefully into a sliding drawer on viewports $< 900\text{px}$ via a hamburger toggle.
+- **Top-Right Profile Avatar Dropdown:** Circular avatar button with user initials and username, opening an accessible dropdown displaying user identity (`ID #${currentUser.id} • Researcher`), direct links to `Profile & History` and `Settings`, and a `Sign Out` action that clears sessions and redirects to the public landing page.

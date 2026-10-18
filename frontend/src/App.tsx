@@ -1,10 +1,23 @@
 import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth';
+import { PublicLayout } from './components/layout/PublicLayout';
 import { AppLayout } from './components/layout/AppLayout';
+import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import './App.css';
 
-// Route-level code splitting for lightning-fast initial load
+// Public Lazy Pages
+const LandingPage = lazy(() =>
+  import('./features/landing/LandingPage').then((m) => ({ default: m.LandingPage }))
+);
+const LoginPage = lazy(() =>
+  import('./features/auth/LoginPage').then((m) => ({ default: m.LoginPage }))
+);
+const RegisterPage = lazy(() =>
+  import('./features/auth/RegisterPage').then((m) => ({ default: m.RegisterPage }))
+);
+
+// Authenticated Research Lazy Pages
 const DashboardPage = lazy(() =>
   import('./features/dashboard/DashboardPage').then((m) => ({ default: m.DashboardPage }))
 );
@@ -34,12 +47,6 @@ const ProfilePage = lazy(() =>
 );
 const SettingsPage = lazy(() =>
   import('./features/settings/SettingsPage').then((m) => ({ default: m.SettingsPage }))
-);
-const LoginPage = lazy(() =>
-  import('./features/auth/LoginPage').then((m) => ({ default: m.LoginPage }))
-);
-const RegisterPage = lazy(() =>
-  import('./features/auth/RegisterPage').then((m) => ({ default: m.RegisterPage }))
 );
 
 function PageLoadingFallback() {
@@ -72,26 +79,40 @@ export function App() {
   return (
     <Suspense fallback={<PageLoadingFallback />}>
       <Routes>
-        <Route element={<AppLayout />}>
-          {/* Authentication Entry Gate: first page is Login if unauthenticated */}
+        {/* Public SaaS Flow (Landing, Login, Register) */}
+        <Route element={<PublicLayout />}>
           <Route
             path="/"
+            element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <LandingPage />}
+          />
+          <Route
+            path="/login"
             element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <LoginPage />}
           />
-          <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/strategy-lab" element={<StrategyLabPage />} />
-          <Route path="/analytics" element={<AnalyticsPage />} />
-          <Route path="/portfolio" element={<PortfolioPage />} />
-          <Route path="/walk-forward" element={<WalkForwardPage />} />
-          <Route path="/heatmap" element={<HeatmapPage />} />
-          <Route path="/datasets" element={<DatasetsPage />} />
-          <Route path="/experiments" element={<ExperimentsPage />} />
-          <Route path="/profile" element={<ProfilePage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route
+            path="/register"
+            element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <RegisterPage />}
+          />
         </Route>
+
+        {/* Authenticated Research Workstation (Protected by Guard) */}
+        <Route element={<ProtectedRoute />}>
+          <Route element={<AppLayout />}>
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/strategy-lab" element={<StrategyLabPage />} />
+            <Route path="/analytics" element={<AnalyticsPage />} />
+            <Route path="/portfolio" element={<PortfolioPage />} />
+            <Route path="/walk-forward" element={<WalkForwardPage />} />
+            <Route path="/heatmap" element={<HeatmapPage />} />
+            <Route path="/datasets" element={<DatasetsPage />} />
+            <Route path="/experiments" element={<ExperimentsPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+          </Route>
+        </Route>
+
+        {/* Wildcard Fallback */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>
   );
