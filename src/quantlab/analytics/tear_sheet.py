@@ -372,3 +372,75 @@ def generate_tear_sheet(
         monthly_matrix=monthly_matrix,
         underwater_curve=underwater_curve,
     )
+
+
+def generate_tear_sheet_markdown_report(
+    data: TearSheetData,
+    strategy_name: str,
+    configuration: str,
+    dataset_name: str,
+) -> str:
+    """Generate a clean, structured Markdown research report from a TearSheetData instance."""
+    s = data.summary
+    t = data.tail_risk
+
+    def _fmt_pct(val: float | None, digits: int = 2) -> str:
+        if val is None or math.isnan(val):
+            return "N/A"
+        return f"{val * 100:.{digits}f}%"
+
+    def _fmt_num(val: float | None, digits: int = 2) -> str:
+        if val is None or math.isnan(val):
+            return "N/A"
+        return f"{val:.{digits}f}"
+
+    lines = [
+        f"# QuantLab Quantitative Research Tear-Sheet — {strategy_name}",
+        "",
+        "## Executive Summary",
+        f"- **Strategy:** {strategy_name}",
+        f"- **Configuration:** {configuration}",
+        f"- **Dataset:** {dataset_name}",
+        f"- **Total Return:** {_fmt_pct(s.total_return)}",
+        f"- **CAGR:** {_fmt_pct(s.cagr)}",
+        f"- **Max Drawdown:** {_fmt_pct(s.max_drawdown)}",
+        f"- **Sharpe Ratio (Rf=5%):** {_fmt_num(s.sharpe_ratio)}",
+        f"- **Sortino Ratio:** {_fmt_num(s.sortino_ratio)}",
+        f"- **Calmar Ratio:** {_fmt_num(s.calmar_ratio)}",
+        f"- **Win Rate:** {_fmt_pct(s.win_rate, 1)}",
+        f"- **Profit Factor:** {_fmt_num(s.profit_factor)}",
+        f"- **Total Trades:** {s.total_trades}",
+        "",
+        "## Tail Risk & Extreme Loss Diagnostics",
+        f"- **Historical VaR (95%):** {_fmt_pct(t.var_95_historical)}",
+        f"- **Parametric VaR (95%):** {_fmt_pct(t.var_95_parametric)}",
+        f"- **Historical VaR (99%):** {_fmt_pct(t.var_99_historical)}",
+        f"- **Parametric VaR (99%):** {_fmt_pct(t.var_99_parametric)}",
+        f"- **Expected Shortfall (CVaR 95%):** {_fmt_pct(t.cvar_95)}",
+        f"- **Expected Shortfall (CVaR 99%):** {_fmt_pct(t.cvar_99)}",
+        f"- **Annualized Volatility:** {_fmt_pct(t.annualized_volatility)}",
+        f"- **Skewness:** {_fmt_num(t.skewness)}",
+        f"- **Excess Kurtosis:** {_fmt_num(t.kurtosis)}",
+        f"- **Tail Ratio:** {_fmt_num(t.tail_ratio)}",
+        "",
+        "## Calendar Monthly Returns Matrix",
+        "| Year | Jan | Feb | Mar | Apr | May | Jun | Jul | Aug | Sep | Oct | Nov | Dec | Year Total |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
+    ]
+
+    for row in data.monthly_matrix:
+        cells = [str(row.year)]
+        for m in MONTH_NAMES:
+            m_val = row.months.get(m)
+            cells.append(_fmt_pct(m_val, 1) if m_val is not None else "-")
+        cells.append(_fmt_pct(row.year_total, 1))
+        lines.append("| " + " | ".join(cells) + " |")
+
+    lines.extend([
+        "",
+        "---",
+        "*Disclaimer: Backtest simulation results are for research and educational purposes only. Past performance does not guarantee future results. Zero look-ahead bias and next-bar open execution friction enforced by QuantLab engine.*",
+    ])
+
+    return "\n".join(lines)
+

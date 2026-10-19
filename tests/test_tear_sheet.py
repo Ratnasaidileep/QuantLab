@@ -13,6 +13,7 @@ from quantlab.analytics.tear_sheet import (
     calculate_tail_ratio,
     calculate_underwater_series,
     generate_tear_sheet,
+    generate_tear_sheet_markdown_report,
 )
 from quantlab.backtest.models import Trade, TradeSide
 from quantlab.data.models import Bar
@@ -162,3 +163,17 @@ def test_generate_tear_sheet_end_to_end():
     assert sheet.tail_risk.calmar_ratio is not None
     assert len(sheet.monthly_matrix) >= 1
     assert len(sheet.underwater_curve) == 30
+
+    report = generate_tear_sheet_markdown_report(
+        data=sheet,
+        strategy_name="Moving Average Crossover",
+        configuration="Fast 10 / Slow 30",
+        dataset_name="reliance_daily.csv",
+    )
+
+    assert "# QuantLab Quantitative Research Tear-Sheet — Moving Average Crossover" in report
+    assert "Fast 10 / Slow 30" in report
+    assert "Historical VaR (95%)" in report
+    assert "Expected Shortfall" in report
+    assert "Calendar Monthly Returns Matrix" in report
+    assert "Disclaimer" in report

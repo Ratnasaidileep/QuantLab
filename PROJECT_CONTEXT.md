@@ -902,3 +902,15 @@ The QuantLab frontend has been fully redesigned and modernized into a terminal-g
   - Compact modifier (`.form-control-sm`) for inline headers and dataset selection toolbars.
 - **Components Standardized:** `TearSheetPanel.tsx` (Strategy dropdown and parameter inputs), `AnalyticsPage.tsx` (Dataset selector), `MonteCarloPanel.tsx` (Strategy, simulations, ruin threshold, resampling mode), `BasketPanel.tsx`, `HeatmapPage.tsx`, and `WalkForwardPage.tsx`.
 
+### 11.8 Automated Research Tear-Sheet Export & Reporting Suite (Implemented October 2026)
+- **Publication-Ready Standalone HTML Dossier (`reportGenerator.ts`):** Client-side generator synthesizing an offline, self-contained HTML research report (`quantlab-tearsheet-<strategy>-<timestamp>.html`). Includes an embedded pure SVG underwater drawdown chart, executive risk/return scorecards, extreme tail-risk tables (Historical VaR, Parametric VaR, CVaR/Expected Shortfall), calendar monthly returns matrix, and academic evaluation disclaimers. Zero external CDN dependencies, fully viewable offline.
+- **Native Print & PDF Layout (`@media print` in `App.css`):** Print-optimized stylesheet designed for academic review and major-project viva presentations. Automatically strips interactive UI chrome (navigation bars, action buttons, form controls, breadcrumbs) and forces a crisp white background, high-contrast dark text, clean table borders, and preserved SVG vector curves for clean direct PDF exports (`Ctrl+P` / `window.print()`).
+- **Institutional CSV Spreadsheet Export:** One-click CSV generation exporting structured quantitative performance metrics (Sharpe, Sortino, Calmar, Max Drawdown, VaR, CVaR, Skewness, Kurtosis) alongside the complete monthly returns matrix for downstream analysis in Excel, Python, or R.
+- **Interactive Export Dropdown Menu (`TearSheetPanel.tsx`):** Added a dropdown menu on the Analytics tear-sheet page offering three distinct export modes:
+  1. 📄 *Standalone HTML Dossier*
+  2. 🖨️ *Print / Save as PDF*
+  3. 📊 *Metrics CSV Spreadsheet*
+  Includes click-outside detection and responsive alignment.
+- **Backend Deterministic Markdown Generator (`tear_sheet.py`):** Added `generate_tear_sheet_markdown_report` to `src/quantlab/analytics/tear_sheet.py` with full unit test coverage (`tests/test_tear_sheet.py`), producing deterministic Markdown dossiers formatted for terminal review, academic documentation, and automated logging.
+
+

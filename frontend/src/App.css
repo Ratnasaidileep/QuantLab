@@ -1356,3 +1356,65 @@ select.form-control option,
   outline-offset: 2px;
 }
 
+/* Print Stylesheet for Quantitative Tear-Sheet & Reports */
+@media print {
+  /* Hide interactive application chrome */
+  header,
+  .top-navbar-links,
+  .mobile-hamburger-btn,
+  .mobile-close-btn,
+  .quantlab-sidebar,
+  .tearsheet-controls,
+  .breadcrumbs-container,
+  .research-notice-card,
+  button:not(.allow-print),
+  .no-print {
+    display: none !important;
+  }
+
+  body,
+  .quantlab-app,
+  main {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .tearsheet-results {
+    width: 100% !important;
+    page-break-inside: avoid;
+  }
+
+  .metric-card,
+  .risk-metric-box {
+    background-color: #f8fafc !important;
+    border: 1px solid #e2e8f0 !important;
+    page-break-inside: avoid;
+  }
+
+  .metric-value,
+  .risk-num {
+    color: #0f172a !important;
+  }
+
+  .monthly-matrix-table th {
+    background-color: #f1f5f9 !important;
+    color: #475569 !important;
+  }
+
+  .monthly-matrix-table td {
+    border: 1px solid #cbd5e1 !important;
+  }
+
+  svg {
+    background-color: #f8fafc !important;
+    border-color: #e2e8f0 !important;
+  }
+
+  svg text {
+    fill: #475569 !important;
+  }
+}
+
+

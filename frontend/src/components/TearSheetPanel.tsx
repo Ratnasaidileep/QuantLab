@@ -1,5 +1,8 @@
-import { type MouseEvent, useMemo, useState } from 'react';
+import { type MouseEvent, useMemo, useState, useRef, useEffect } from 'react';
+import { Download, FileText, Printer, FileSpreadsheet, ChevronDown } from 'lucide-react';
 import { executeTearSheet } from '../api/client';
+import { useAuth } from '../hooks/useAuth';
+import { downloadHtmlReport, downloadMetricsCsv, printTearSheet } from '../utils/reportGenerator';
 import type {
   PositionSizingMode,
   StrategyType,
@@ -49,6 +52,24 @@ export function TearSheetPanel({
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<TearSheetResponse | null>(null);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const [isExportOpen, setIsExportOpen] = useState<boolean>(false);
+  const exportRef = useRef<HTMLDivElement>(null);
+  const { currentUser } = useAuth();
+  const analystName = currentUser?.username || 'Quantitative Researcher';
+
+  useEffect(() => {
+    function handleClickOutside(e: globalThis.MouseEvent) {
+      if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
+        setIsExportOpen(false);
+      }
+    }
+    if (isExportOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isExportOpen]);
 
   const handleRun = async () => {
     setIsLoading(true);
@@ -308,7 +329,17 @@ export function TearSheetPanel({
       {result && (
         <div className="tearsheet-results">
           {/* Top Level Summary Cards */}
-          <div className="results-header" style={{ marginBottom: '1.25rem' }}>
+          <div
+            className="results-header"
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'flex-start',
+              flexWrap: 'wrap',
+              gap: '1rem',
+              marginBottom: '1.25rem',
+            }}
+          >
             <div>
               <h3>
                 {result.strategy_name} — <code>{result.configuration}</code>
@@ -316,6 +347,147 @@ export function TearSheetPanel({
               <p className="caption">
                 Dataset: <strong>{result.dataset}</strong> | Bars Processed: <strong>{result.bars_processed}</strong> | Final Equity: <strong>₹{result.final_equity.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</strong>
               </p>
+            </div>
+
+            {/* Export Research Report Action Menu */}
+            <div ref={exportRef} style={{ position: 'relative' }} className="no-print">
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => setIsExportOpen(!isExportOpen)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.45rem',
+                  padding: '0.4rem 0.75rem',
+                  fontSize: '0.82rem',
+                  fontWeight: 600,
+                  borderRadius: '6px',
+                  backgroundColor: isExportOpen ? 'var(--bg-elevated)' : 'var(--bg-card)',
+                  borderColor: isExportOpen ? 'var(--accent-primary)' : 'var(--border-subtle)',
+                  color: isExportOpen ? 'var(--accent-primary)' : 'var(--text-primary)',
+                  cursor: 'pointer',
+                  transition: 'all var(--transition-fast)',
+                }}
+                title="Export Quantitative Research Report"
+              >
+                <Download size={15} style={{ color: 'var(--accent-primary)' }} />
+                <span>Export Report</span>
+                <ChevronDown
+                  size={13}
+                  style={{
+                    transform: isExportOpen ? 'rotate(180deg)' : 'none',
+                    transition: 'transform 0.15s ease',
+                  }}
+                />
+              </button>
+
+              {isExportOpen && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 6px)',
+                    right: 0,
+                    width: '270px',
+                    backgroundColor: 'var(--bg-card)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '8px',
+                    padding: '0.45rem',
+                    boxShadow: '0 12px 28px -4px rgba(0, 0, 0, 0.65)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.3rem',
+                    zIndex: 110,
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsExportOpen(false);
+                      downloadHtmlReport(result, analystName);
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '0.65rem',
+                      padding: '0.55rem 0.65rem',
+                      borderRadius: '6px',
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'var(--text-primary)',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'background-color var(--transition-fast)',
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-elevated)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                  >
+                    <FileText size={17} style={{ color: 'var(--accent-primary)', marginTop: '0.1rem', flexShrink: 0 }} />
+                    <div>
+                      <div style={{ fontSize: '0.82rem', fontWeight: 600 }}>Standalone HTML Dossier</div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Self-contained offline file with embedded SVG</div>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsExportOpen(false);
+                      printTearSheet();
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '0.65rem',
+                      padding: '0.55rem 0.65rem',
+                      borderRadius: '6px',
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'var(--text-primary)',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'background-color var(--transition-fast)',
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-elevated)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                  >
+                    <Printer size={17} style={{ color: 'var(--profit)', marginTop: '0.1rem', flexShrink: 0 }} />
+                    <div>
+                      <div style={{ fontSize: '0.82rem', fontWeight: 600 }}>Print / Save as PDF</div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Formatted high-contrast document for PDF export</div>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsExportOpen(false);
+                      downloadMetricsCsv(result);
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '0.65rem',
+                      padding: '0.55rem 0.65rem',
+                      borderRadius: '6px',
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'var(--text-primary)',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'background-color var(--transition-fast)',
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-elevated)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+                  >
+                    <FileSpreadsheet size={17} style={{ color: 'var(--benchmark)', marginTop: '0.1rem', flexShrink: 0 }} />
+                    <div>
+                      <div style={{ fontSize: '0.82rem', fontWeight: 600 }}>Metrics CSV Spreadsheet</div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Tabular metrics & monthly returns in CSV</div>
+                    </div>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
