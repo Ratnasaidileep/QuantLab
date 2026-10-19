@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from quantlab.storage.repository import (
+    create_user,
     delete_experiment,
     get_connection,
     get_experiment,
@@ -189,3 +190,86 @@ def test_delete_experiment(tmp_path: Path):
     # Deleting again returns False
     deleted_again = delete_experiment(record.id, db_path=db_file)
     assert deleted_again is False
+
+
+def test_scope_to_user_isolation(tmp_path: Path):
+    db_file = tmp_path / "test_quantlab.db"
+    user10 = create_user("alice10", "hash10", "salt10", db_path=db_file)
+
+    # User 10 experiment
+    user_exp = save_experiment(
+        name="User 10 Private Run",
+        dataset="reliance_daily.csv",
+        strategy="moving_average",
+        parameters={"fast_period": 10, "slow_period": 30},
+        initial_cash=100000.0,
+        commission_rate=0.001,
+        slippage_rate=0.001,
+        sizing_mode="unit",
+        quantity_per_trade=1.0,
+        final_equity=105000.0,
+        total_pnl=5000.0,
+        total_return=0.05,
+        max_drawdown=0.01,
+        total_trades=4,
+        win_rate=0.5,
+        profit_factor=1.5,
+        sharpe_ratio=1.2,
+        sortino_ratio=1.8,
+        cagr=0.06,
+        equity_curve=[],
+        trades=[],
+        user_id=user10.id,
+        db_path=db_file,
+    )
+
+    # Guest experiment (user_id is None)
+    guest_exp = save_experiment(
+        name="Guest Public Run",
+        dataset="reliance_daily.csv",
+        strategy="rsi",
+        parameters={"period": 14},
+        initial_cash=50000.0,
+        commission_rate=0.001,
+        slippage_rate=0.001,
+        sizing_mode="unit",
+        quantity_per_trade=1.0,
+        final_equity=52000.0,
+        total_pnl=2000.0,
+        total_return=0.04,
+        max_drawdown=0.02,
+        total_trades=2,
+        win_rate=0.5,
+        profit_factor=1.2,
+        sharpe_ratio=0.9,
+        sortino_ratio=1.1,
+        cagr=0.04,
+        equity_curve=[],
+        trades=[],
+        user_id=None,
+        db_path=db_file,
+    )
+
+    # 1. Guest list: only sees guest experiment
+    guest_list = list_experiments(scope_to_user=True, user_id=None, db_path=db_file)
+    assert len(guest_list) == 1
+    assert guest_list[0].id == guest_exp.id
+
+    # 2. User 10 list: only sees User 10 experiment
+    user_list = list_experiments(scope_to_user=True, user_id=user10.id, db_path=db_file)
+    assert len(user_list) == 1
+    assert user_list[0].id == user_exp.id
+
+    # 3. Guest cannot retrieve User 10 experiment detail
+    assert get_experiment(user_exp.id, scope_to_user=True, user_id=None, db_path=db_file) is None
+    # User 10 can retrieve their own
+    assert get_experiment(user_exp.id, scope_to_user=True, user_id=user10.id, db_path=db_file) is not None
+
+    # 4. Guest cannot delete User 10 experiment
+    assert delete_experiment(user_exp.id, scope_to_user=True, user_id=None, db_path=db_file) is False
+    # User 10 can delete their own
+    assert delete_experiment(user_exp.id, scope_to_user=True, user_id=user10.id, db_path=db_file) is True
+
+    # 5. Guest can delete guest experiment
+    assert delete_experiment(guest_exp.id, scope_to_user=True, user_id=None, db_path=db_file) is True
+

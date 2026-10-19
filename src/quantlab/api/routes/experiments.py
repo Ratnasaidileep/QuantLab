@@ -105,6 +105,7 @@ def get_all_experiments(
         dataset=dataset,
         strategy=strategy,
         user_id=current_user.id if current_user else None,
+        scope_to_user=True,
     )
     items = [
         ExperimentSummaryDTO(
@@ -142,6 +143,7 @@ def get_single_experiment(
     record = get_experiment(
         experiment_id,
         user_id=current_user.id if current_user else None,
+        scope_to_user=True,
     )
     if record is None:
         raise HTTPException(
@@ -187,6 +189,7 @@ def remove_experiment(
     deleted = delete_experiment(
         experiment_id,
         user_id=current_user.id if current_user else None,
+        scope_to_user=True,
     )
     if not deleted:
         raise HTTPException(

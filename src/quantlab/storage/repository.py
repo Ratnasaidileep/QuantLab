@@ -259,9 +259,13 @@ def list_experiments(
     dataset: str | None = None,
     strategy: str | None = None,
     user_id: int | None = None,
+    scope_to_user: bool = False,
     db_path: Path | str | None = None,
 ) -> list[ExperimentSummary]:
-    """Retrieve lightweight summaries of saved experiments ordered newest first."""
+    """Retrieve lightweight summaries of saved experiments ordered newest first.
+
+    If scope_to_user is True and user_id is None, restricts results to guest experiments (user_id IS NULL).
+    """
     conn = get_connection(db_path)
     try:
         query = """
@@ -282,6 +286,8 @@ def list_experiments(
         if user_id is not None:
             conditions.append("user_id = ?")
             params.append(user_id)
+        elif scope_to_user:
+            conditions.append("user_id IS NULL")
 
         if conditions:
             query += " WHERE " + " AND ".join(conditions)
@@ -322,9 +328,13 @@ def list_experiments(
 def get_experiment(
     experiment_id: int,
     user_id: int | None = None,
+    scope_to_user: bool = False,
     db_path: Path | str | None = None,
 ) -> ExperimentRecord | None:
-    """Retrieve full details of an experiment by ID, with optional user workspace isolation."""
+    """Retrieve full details of an experiment by ID, with optional user workspace isolation.
+
+    If scope_to_user is True and user_id is None, restricts retrieval to guest experiments (user_id IS NULL).
+    """
     conn = get_connection(db_path)
     try:
         query = "SELECT * FROM experiments WHERE id = ?"
@@ -332,6 +342,8 @@ def get_experiment(
         if user_id is not None:
             query += " AND (user_id = ? OR user_id IS NULL)"
             params.append(user_id)
+        elif scope_to_user:
+            query += " AND user_id IS NULL"
 
         row = conn.execute(query, params).fetchone()
 
@@ -372,9 +384,15 @@ def get_experiment(
 def delete_experiment(
     experiment_id: int,
     user_id: int | None = None,
+    scope_to_user: bool = False,
     db_path: Path | str | None = None,
 ) -> bool:
-    """Delete an experiment by ID, with optional user workspace isolation."""
+    """Delete an experiment by ID, with optional user workspace isolation.
+
+    If scope_to_user is True:
+        - If user_id is provided, deletes strictly matching user_id.
+        - If user_id is None, deletes strictly matching guest experiments (user_id IS NULL).
+    """
     conn = get_connection(db_path)
     try:
         with conn:
@@ -383,6 +401,8 @@ def delete_experiment(
             if user_id is not None:
                 query += " AND user_id = ?"
                 params.append(user_id)
+            elif scope_to_user:
+                query += " AND user_id IS NULL"
             cursor = conn.execute(query, params)
             return cursor.rowcount > 0
     finally:

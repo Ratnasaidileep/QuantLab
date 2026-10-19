@@ -18,6 +18,7 @@ class PerformanceMetrics:
     sortino_ratio: float | None = None
     cagr: float | None = None
     calmar_ratio: float | None = None
+    closed_trades: int = 0
 
 
 def calculate_trade_pnl(trades: Sequence[Trade]) -> list[float]:
@@ -182,12 +183,14 @@ def calculate_metrics(
             max_drawdown = max(max_drawdown, drawdown)
 
     total_trades_count = len(trades) if trades is not None else 0
+    closed_trades_count = 0
     win_rate: float | None = None
     profit_factor: float | None = None
 
     if trades:
         closed_pnls = calculate_trade_pnl(trades)
         if closed_pnls:
+            closed_trades_count = len(closed_pnls)
             winning_trades = [p for p in closed_pnls if p > 0]
             gross_profit = sum(winning_trades)
             gross_loss = abs(sum(p for p in closed_pnls if p < 0))
@@ -234,4 +237,5 @@ def calculate_metrics(
         sortino_ratio=sortino,
         cagr=cagr,
         calmar_ratio=calmar,
+        closed_trades=closed_trades_count,
     )

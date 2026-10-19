@@ -103,6 +103,7 @@ class MetricsDTO(BaseModel):
     sortino_ratio: float | None = None
     cagr: float | None = None
     calmar_ratio: float | None = None
+    closed_trades: int | None = None
 
 
 class BacktestRequest(BaseModel):

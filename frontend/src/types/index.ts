@@ -61,6 +61,7 @@ export interface MetricsDTO {
   sortino_ratio: number | null;
   cagr: number | null;
   calmar_ratio?: number | null;
+  closed_trades?: number | null;
 }
 
 export interface BacktestRequest {

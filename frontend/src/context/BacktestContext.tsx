@@ -10,6 +10,7 @@ import type {
   ComparisonResponse,
   DatasetInfo,
   ExperimentDetailDTO,
+  StrategyType,
 } from '../types';
 import { BacktestContext, DEFAULT_CONFIG } from './backtest-context';
 
@@ -96,6 +97,34 @@ export function BacktestProvider({ children }: { children: React.ReactNode }) {
   };
 
   const loadExperiment = (exp: ExperimentDetailDTO) => {
+    let stratType: StrategyType = 'moving_average';
+    const sName = (exp.strategy || '').toLowerCase();
+    if (sName.includes('rsi')) stratType = 'rsi';
+    else if (sName.includes('bollinger')) stratType = 'bollinger';
+    else if (sName.includes('macd')) stratType = 'macd';
+
+    const p = exp.parameters || {};
+    setConfig((prev) => ({
+      ...prev,
+      dataset: exp.dataset || prev.dataset,
+      strategy: stratType,
+      fast_period: typeof p.fast_period === 'number' ? p.fast_period : prev.fast_period,
+      slow_period: typeof p.slow_period === 'number' ? p.slow_period : prev.slow_period,
+      rsi_period: typeof p.rsi_period === 'number' ? p.rsi_period : prev.rsi_period,
+      oversold: typeof p.oversold === 'number' ? p.oversold : prev.oversold,
+      overbought: typeof p.overbought === 'number' ? p.overbought : prev.overbought,
+      bb_period: typeof p.bb_period === 'number' ? p.bb_period : (typeof p.period === 'number' ? p.period : prev.bb_period),
+      bb_std_dev: typeof p.bb_std_dev === 'number' ? p.bb_std_dev : (typeof p.std_dev_multiplier === 'number' ? p.std_dev_multiplier : prev.bb_std_dev),
+      macd_fast: typeof p.macd_fast === 'number' ? p.macd_fast : (typeof p.fast_period === 'number' && stratType === 'macd' ? p.fast_period : prev.macd_fast),
+      macd_slow: typeof p.macd_slow === 'number' ? p.macd_slow : (typeof p.slow_period === 'number' && stratType === 'macd' ? p.slow_period : prev.macd_slow),
+      macd_signal: typeof p.macd_signal === 'number' ? p.macd_signal : (typeof p.signal_period === 'number' ? p.signal_period : prev.macd_signal),
+      initial_cash: exp.initial_cash ?? prev.initial_cash,
+      commission_rate: exp.commission_rate ?? prev.commission_rate,
+      slippage_rate: exp.slippage_rate ?? prev.slippage_rate,
+      sizing_mode: (exp.sizing_mode as 'unit' | 'fixed_quantity' | 'all_in') ?? prev.sizing_mode,
+      quantity_per_trade: exp.quantity_per_trade ?? prev.quantity_per_trade,
+    }));
+
     setBacktestResult({
       strategy_name: exp.strategy,
       configuration: exp.name,

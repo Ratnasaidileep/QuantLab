@@ -86,7 +86,10 @@ with st.sidebar.expander("📥 Ingest Market Data (Upload / Fetch)"):
         try:
             content = upload_file.read()
             df = pd.read_csv(io.StringIO(content.decode("utf-8", errors="replace")))
-            target = DATA_DIR / upload_file.name.lower()
+            clean_name = re.sub(r"[^\w\-.]", "_", Path(upload_file.name).name).lower()
+            if not clean_name.endswith(".csv"):
+                clean_name += ".csv"
+            target = DATA_DIR / clean_name
             df.to_csv(target, index=False)
             bars = load_bars_from_csv(target)
             save_bars_to_csv(bars, target)
@@ -1351,7 +1354,7 @@ with analytics_tab_history:
         hist_datasets,
         key="hist_filter_ds",
     )
-    hist_strategies = ["All", "moving_average", "rsi", "bollinger"]
+    hist_strategies = ["All", "moving_average", "rsi", "bollinger", "macd"]
     selected_hist_strategy = filter_c2.selectbox(
         "Filter by Strategy",
         hist_strategies,

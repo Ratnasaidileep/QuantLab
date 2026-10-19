@@ -206,9 +206,24 @@ def test_workspace_isolation_between_users(client: TestClient):
     bad_delete = client.delete(f"/api/v1/experiments/{alice_exp_id}", headers=headers2)
     assert bad_delete.status_code == 404
 
+    # Unauthenticated guest attempts to delete Alice's experiment -> returns 404 (isolated)
+    guest_delete = client.delete(f"/api/v1/experiments/{alice_exp_id}")
+    assert guest_delete.status_code == 404
+
+    # Unauthenticated guest attempts to fetch Alice's private experiment -> returns 404
+    guest_get = client.get(f"/api/v1/experiments/{alice_exp_id}")
+    assert guest_get.status_code == 404
+
+    # Unauthenticated guest list -> Alice's and Bob's private experiments are NOT leaked
+    guest_list = client.get("/api/v1/experiments").json()
+    guest_names = [e["name"] for e in guest_list["experiments"]]
+    assert "Alice Private MA Strategy" not in guest_names
+    assert "Bob Private RSI Strategy" not in guest_names
+
     # Alice deletes her own experiment -> succeeds
     good_delete = client.delete(f"/api/v1/experiments/{alice_exp_id}", headers=headers1)
     assert good_delete.status_code == 200
 
     # Cleanup Bob's experiment
     client.delete(f"/api/v1/experiments/{bob_exp_id}", headers=headers2)
+

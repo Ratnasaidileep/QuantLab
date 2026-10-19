@@ -12,11 +12,10 @@ if not exist ".venv\Scripts\python.exe" (
 )
 
 echo [2/3] Starting FastAPI Backend on port 8000...
-start "QuantLab Backend (FastAPI)" cmd /k ".venv\Scripts\python.exe -m uvicorn src.quantlab.api.main:app --reload --port 8000"
+start "QuantLab Backend (FastAPI)" cmd /k "cd /d ""%~dp0"" && .venv\Scripts\python.exe -m uvicorn src.quantlab.api.main:app --reload --port 8000"
 
 echo [3/3] Starting Vite Frontend on port 5173...
-cd frontend
-start "QuantLab Frontend (Vite)" cmd /k "npm run dev"
+start "QuantLab Frontend (Vite)" cmd /k "cd /d ""%~dp0frontend"" && npm run dev"
 
 echo.
 echo ========================================================

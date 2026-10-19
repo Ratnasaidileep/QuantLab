@@ -913,4 +913,23 @@ The QuantLab frontend has been fully redesigned and modernized into a terminal-g
   Includes click-outside detection and responsive alignment.
 - **Backend Deterministic Markdown Generator (`tear_sheet.py`):** Added `generate_tear_sheet_markdown_report` to `src/quantlab/analytics/tear_sheet.py` with full unit test coverage (`tests/test_tear_sheet.py`), producing deterministic Markdown dossiers formatted for terminal review, academic documentation, and automated logging.
 
+### 11.9 Full Project Gap Analysis, Workspace Isolation Hardening & Multi-Layer Fixes (Implemented October 2026)
+- **Multi-Tenant Workspace Isolation & IDOR Protection (`repository.py` & `experiments.py`):**
+  - Resolved potential Insecure Direct Object Reference (IDOR) vulnerability where unauthenticated guest requests could read or delete registered users' private backtest runs.
+  - Added strict `scope_to_user: bool = False` filtering parameter across `list_experiments()`, `get_experiment()`, and `delete_experiment()` in SQLite repository.
+  - In FastAPI experiments router, enabled `scope_to_user=True` ensuring guest sessions (`user_id is None`) are strictly constrained to `WHERE user_id IS NULL`, preventing unauthorized cross-user inspection or deletion (verified by automated tests returning 404 on cross-user access).
+- **Frontend Configuration State Restoration Fix (`BacktestContext.tsx`):**
+  - Resolved state desynchronization bug where restoring a saved experiment from the database loaded equity curves and metric scorecards but failed to populate the active strategy parameter form.
+  - Updated `loadExperiment()` to unroll saved parameters, strategy identifiers, dataset names, capital settings, commissions, slippage, and position sizing models into `config` state.
+- **Quantitative Trade Metrics Disambiguation (`closed_trades` vs `total_orders`):**
+  - Disambiguated order execution fills from completed round-trip trades.
+  - Added explicit `closed_trades: int = 0` to `PerformanceMetrics`, `MetricsDTO`, and frontend types.
+  - Updated `MetricCards.tsx` to clearly report round-trip trade counts vs total execution orders, ensuring academic evaluators have complete clarity on the win rate denominator.
+- **Streamlit Prototype Parity & Security (`app.py`):**
+  - Added `"macd"` to the historical strategy filtering selector (`hist_strategies = ["All", "moving_average", "rsi", "bollinger", "macd"]`).
+  - Added strict path and filename sanitization on CSV uploads (`re.sub(r"[^\w\-.]", "_", Path(upload_file.name).name).lower()`) preventing directory traversal risks.
+- **Launcher Portability Polish (`start_quantlab.bat`):**
+  - Sanitized directory context switches by executing child processes via `cd /d "%~dp0"` without mutating the parent launcher shell directory.
+
+
 

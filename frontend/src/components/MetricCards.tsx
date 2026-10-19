@@ -160,7 +160,11 @@ export function MetricCards({
           <Percent size={15} style={{ color: 'var(--text-tertiary)' }} />
         </div>
         <span className="metric-value font-mono">{winRateStr}</span>
-        <span className="metric-sub">{metrics.total_trades} trades executed</span>
+        <span className="metric-sub">
+          {metrics.closed_trades !== undefined && metrics.closed_trades !== null
+            ? `${metrics.closed_trades} round-trip(s) (${metrics.total_trades} orders)`
+            : `${metrics.total_trades} orders executed`}
+        </span>
       </div>
 
       {/* Profit Factor */}
