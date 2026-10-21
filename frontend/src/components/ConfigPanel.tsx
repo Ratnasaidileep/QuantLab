@@ -173,7 +173,8 @@ export function ConfigPanel({
     config.strategy === 'confluence' &&
     ((config.confluence_oversold ?? 35) >= (config.confluence_overbought ?? 65) ||
       (config.confluence_trend_period ?? 50) < 2 ||
-      (config.confluence_pullback_period ?? 14) < 2);
+      (config.confluence_pullback_period ?? 14) < 2 ||
+      (config.confluence_trend_period ?? 50) <= (config.confluence_pullback_period ?? 14));
 
   const hasFormErrors = isMaInvalid || isRsiInvalid || isBbInvalid || isMacdInvalid || isConfluenceInvalid;
 
@@ -656,7 +657,7 @@ export function ConfigPanel({
           {isConfluenceInvalid && (
             <div className="field-error" style={{ color: 'var(--loss)', fontSize: '0.75rem', marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
               <AlertTriangle size={13} />
-              Oversold must be strictly less than Overbought, and periods must be &ge; 2.
+              Trend EMA must be strictly greater than RSI pullback, and Oversold &lt; Overbought.
             </div>
           )}
         </div>

@@ -150,6 +150,7 @@ def run_backtest(request: BacktestRequest) -> BacktestResponse:
         EquityPointDTO(
             timestamp=bar.timestamp.isoformat(),
             equity=equity,
+            price=bar.close,
         )
         for bar, equity in zip(bars, result.equity_curve)
     ]

@@ -15,6 +15,12 @@ def test_confluence_parameter_validation():
     with pytest.raises(ValueError, match="pullback_period"):
         ConfluenceStrategy(pullback_period=1)
 
+    with pytest.raises(ValueError, match="strictly greater than"):
+        ConfluenceStrategy(trend_period=14, pullback_period=14)
+
+    with pytest.raises(ValueError, match="strictly greater than"):
+        ConfluenceStrategy(trend_period=10, pullback_period=20)
+
     with pytest.raises(ValueError, match="Thresholds must satisfy"):
         ConfluenceStrategy(oversold=70.0, overbought=30.0)
 

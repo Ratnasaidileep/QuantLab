@@ -68,8 +68,8 @@ def test_backtest_ma_strategy_success(client: TestClient):
 
     metrics = data["metrics"]
     assert metrics["total_trades"] == 18
-    assert metrics["win_rate"] == pytest.approx(0.333, rel=1e-2)
-    assert metrics["profit_factor"] == pytest.approx(0.73, rel=1e-2)
+    assert metrics["win_rate"] == pytest.approx(0.111, rel=1e-2)
+    assert metrics["profit_factor"] == pytest.approx(0.379, rel=1e-2)
     assert metrics["sharpe_ratio"] is not None
     assert metrics["cagr"] is not None
 

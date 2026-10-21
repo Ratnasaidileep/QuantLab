@@ -187,7 +187,11 @@ class Backtest:
                         )
 
             elif (
-                pending_signal != Signal.LONG
+                (
+                    (pending_signal == Signal.SHORT)
+                    if self.use_crossover
+                    else (pending_signal != Signal.LONG)
+                )
                 and self.position.quantity > 0.0
             ):
                 quantity = self.position.quantity

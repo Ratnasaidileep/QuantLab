@@ -48,6 +48,7 @@ export interface TradeDTO {
 export interface EquityPointDTO {
   timestamp: string;
   equity: number;
+  price?: number | null;
 }
 
 export interface MetricsDTO {

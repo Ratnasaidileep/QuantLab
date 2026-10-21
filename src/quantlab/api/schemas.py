@@ -92,6 +92,7 @@ class TradeDTO(BaseModel):
 class EquityPointDTO(BaseModel):
     timestamp: str
     equity: float
+    price: float | None = None
 
 
 class MetricsDTO(BaseModel):
@@ -307,6 +308,13 @@ class BacktestRequest(BaseModel):
         ):
             raise ValueError(
                 f"confluence_pullback_period ({self.confluence_pullback_period}) must be at least 2."
+            )
+        if (
+            self.strategy == StrategyType.CONFLUENCE
+            and self.confluence_trend_period <= self.confluence_pullback_period
+        ):
+            raise ValueError(
+                f"confluence_trend_period ({self.confluence_trend_period}) must be strictly greater than confluence_pullback_period ({self.confluence_pullback_period})."
             )
         if (
             self.strategy == StrategyType.CONFLUENCE

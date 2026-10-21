@@ -975,11 +975,26 @@ The QuantLab frontend has been fully redesigned and modernized into a terminal-g
   - Features an interactive matrix table, view-mode switcher (Matrix Table, Raw Markdown, LaTeX Booktabs), and 1-click clipboard copy / CSV download buttons.
 
 ### 11.14 Complete Verification & Quality Status (October 2026)
-- **Backend Unit & Integration Tests:** 223/223 passed in 8.84s (`python -m pytest -q`).
+- **Backend Unit & Integration Tests:** 224/224 passed (`python -m pytest -q`).
 - **Python Linting:** Clean (`ruff check .` -> All checks passed!).
-- **Frontend Type Checking & Build:** `tsc -b && vite build` -> built cleanly in 991ms.
+- **Frontend Type Checking & Build:** `tsc -b && vite build` -> built cleanly in 1.09s.
 - **Frontend Code Quality:** `eslint .` -> 0 errors, 0 warnings.
 - **Live Local Platform Services:**
   - FastAPI Backend active on `http://127.0.0.1:8000` (auto-reloading, OpenAPI docs at `/docs`).
   - Vite React Frontend active on `http://127.0.0.1:5173`.
+
+### 11.15 Multi-Perspective Trader & Quant Quality Audit Remediation (Implemented October 2026)
+- **QL-DEF-01: Engine Premature Crossover Exit Resolution (`src/quantlab/backtest/engine.py`):**
+  - Resolved a critical engine defect where crossover strategies (`use_crossover=True`, e.g. Moving Average Crossover, MACD) prematurely liquidated positions on the very next bar because `generate_crossover_signal()` returns `Signal.FLAT` during trend continuations.
+  - Implemented `is_exit_signal = (pending_signal == Signal.SHORT) if self.use_crossover else (pending_signal != Signal.LONG)`, enabling trend-following strategies to hold positions across true multi-week/multi-month trends until an explicit reversal crossover or intraday risk stop triggers.
+  - Added test coverage in `tests/test_backtest.py` (`test_backtest_crossover_mode_holds_across_flat_signals`) and updated `tests/test_api.py` with multi-bar holding metrics.
+- **QL-DEF-02: Confluence Parameter Constraint Validation (`src/quantlab/strategy/confluence.py`, `src/quantlab/api/schemas.py`, `ConfigPanel.tsx`):**
+  - Enforced `trend_period > pullback_period` validation across `ConfluenceStrategy.__init__`, Pydantic `BacktestRequest` model validator, and React `ConfigPanel` form validation.
+  - Prevents contradictory configurations where the macro trend filter has equal or shorter duration than the micro pullback oscillator.
+  - Added unit test validation in `tests/test_confluence.py`.
+- **QL-DEF-03: Chronological Asset Price Chart & Trade Execution Overlay (`frontend/src/components/EquityChart.tsx`, `routes/backtest.py`):**
+  - Added `price: float | None = None` to `EquityPointDTO` and populated `bar.close` in the backtest response.
+  - Upgraded the "Price & Executions" tab in Strategy Lab to plot the true historical asset closing price curve with gradient fill and horizontal price ticks.
+  - Overlaid directional execution markers: Green upward triangles ($lacktriangle$) for BUY entries and red downward triangles ($lacktriangledown$) for SELL exits at exact chronological bar timestamps and execution prices.
+  - Added interactive hover crosshair showing bar date and close price, plus an interactive trade inspection drawer displaying execution price, quantity, timestamp, and audit exit reasons (e.g. `signal`, `stop_loss`, `take_profit`, `atr_trailing_stop`).
 

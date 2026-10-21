@@ -31,6 +31,10 @@ class ConfluenceStrategy:
             raise ValueError("trend_period must be at least 2.")
         if pullback_period < 2:
             raise ValueError("pullback_period must be at least 2.")
+        if trend_period <= pullback_period:
+            raise ValueError(
+                f"trend_period ({trend_period}) must be strictly greater than pullback_period ({pullback_period})."
+            )
         if not (0.0 <= oversold < overbought <= 100.0):
             raise ValueError(
                 f"Thresholds must satisfy 0 <= oversold < overbought <= 100 (got oversold={oversold}, overbought={overbought})."

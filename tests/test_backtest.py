@@ -309,18 +309,48 @@ def test_backtest_uses_bearish_crossover_to_close_long():
         make_bar(10.0, 10.0, 2),
         make_bar(9.0, 9.0, 3),
         make_bar(8.0, 8.0, 4),
-        make_bar(12.0, 12.0, 5),
-        make_bar(20.0, 20.0, 6),
-        make_bar(15.0, 15.0, 7),
-        make_bar(10.0, 10.0, 8),
+        make_bar(12.0, 12.0, 5),  # Bullish crossover occurs at Bar 5 close
+        make_bar(20.0, 20.0, 6),  # Buy 1 unit at 20.0 open; fast > slow continues
+        make_bar(15.0, 15.0, 7),  # Hold position across continuation (no exit on FLAT)
+        make_bar(10.0, 10.0, 8),  # Bearish crossover occurs at Bar 8 close
+        make_bar(10.0, 10.0, 9),  # Exit executed at Bar 9 open (10.0)
     ]
 
     result = backtest.run(bars)
 
-    assert result.final_cash == pytest.approx(95.0)
-    assert result.final_equity == pytest.approx(95.0)
+    # Buy at 20.0 (cash: 100 - 20 = 80), sell at 10.0 (cash: 80 + 10 = 90)
+    assert result.final_cash == pytest.approx(90.0)
+    assert result.final_equity == pytest.approx(90.0)
     assert backtest.position.signal == Signal.FLAT
     assert backtest.position.quantity == pytest.approx(0.0)
+
+
+def test_backtest_crossover_mode_holds_across_flat_signals():
+    """Verify that crossover mode does not liquidate prematurely on FLAT continuation bars."""
+    strategy = MovingAverageCrossover(fast_period=2, slow_period=4)
+    backtest = Backtest(
+        initial_cash=100.0,
+        strategy=strategy,
+        use_crossover=True,
+    )
+
+    bars = [
+        make_bar(10.0, 10.0, 0),
+        make_bar(10.0, 10.0, 1),
+        make_bar(10.0, 10.0, 2),
+        make_bar(9.0, 9.0, 3),
+        make_bar(8.0, 8.0, 4),
+        make_bar(12.0, 12.0, 5),  # Bullish crossover
+        make_bar(20.0, 20.0, 6),  # Buy 1 unit at 20.0 open
+        make_bar(25.0, 25.0, 7),  # Continuation bar (FLAT crossover signal) -> MUST HOLD
+    ]
+
+    result = backtest.run(bars)
+
+    assert backtest.position.quantity == pytest.approx(1.0)
+    assert backtest.position.signal == Signal.LONG
+    assert result.final_cash == pytest.approx(80.0)
+    assert result.final_equity == pytest.approx(80.0 + 1.0 * 25.0)
 
 def test_backtest_records_executed_buy_trade():
     strategy = MovingAverageCrossover(fast_period=2, slow_period=3)

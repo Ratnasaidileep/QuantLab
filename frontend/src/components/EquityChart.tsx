@@ -194,6 +194,108 @@ export function EquityChart({
     };
   }, [filteredData, filteredBenchmark, initialCash]);
 
+  // Price & Trade execution overlay calculations
+  const priceChartData = useMemo(() => {
+    if (!filteredData || filteredData.length === 0) return null;
+
+    const hasPointPrices = filteredData.some((d) => typeof d.price === 'number' && d.price > 0);
+    const validPrices = hasPointPrices
+      ? filteredData.map((d) => (typeof d.price === 'number' && d.price > 0 ? d.price : 0)).filter((p) => p > 0)
+      : trades.map((t) => t.price).filter((p) => p > 0);
+
+    if (validPrices.length === 0) return null;
+
+    let minP = Math.min(...validPrices);
+    let maxP = Math.max(...validPrices);
+    const pSpan = maxP - minP || 1;
+    minP -= pSpan * 0.08;
+    maxP += pSpan * 0.08;
+
+    const plotHeight = EQUITY_HEIGHT - PADDING.top - PADDING.bottom;
+    const n = filteredData.length;
+    const scaleX = (i: number) => PADDING.left + (i / (n - 1 || 1)) * CHART_WIDTH;
+    const scalePriceY = (val: number) =>
+      PADDING.top + plotHeight - ((val - minP) / (maxP - minP)) * plotHeight;
+
+    const dateToXMap = new Map<string, number>();
+    const pricePoints: Array<{ x: number; y: number; price: number; timestamp: string }> = [];
+
+    filteredData.forEach((d, i) => {
+      const x = scaleX(i);
+      const dateKey = d.timestamp.slice(0, 10);
+      if (!dateToXMap.has(dateKey)) {
+        dateToXMap.set(dateKey, x);
+      }
+      const pVal = typeof d.price === 'number' && d.price > 0 ? d.price : validPrices[0];
+      pricePoints.push({
+        x,
+        y: scalePriceY(pVal),
+        price: pVal,
+        timestamp: d.timestamp,
+      });
+    });
+
+    const pricePath = pricePoints.reduce(
+      (acc, p, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`,
+      ''
+    );
+    const firstX = pricePoints[0]?.x || PADDING.left;
+    const lastX = pricePoints[pricePoints.length - 1]?.x || WIDTH - PADDING.right;
+    const bottomY = PADDING.top + plotHeight;
+    const priceArea = `${pricePath} L ${lastX} ${bottomY} L ${firstX} ${bottomY} Z`;
+
+    const startTime = new Date(filteredData[0].timestamp).getTime();
+    const endTime = new Date(filteredData[filteredData.length - 1].timestamp).getTime();
+
+    const mappedTrades = trades
+      .filter((t) => {
+        const time = new Date(t.timestamp).getTime();
+        return time >= startTime && time <= endTime;
+      })
+      .map((t) => {
+        const dateKey = t.timestamp.slice(0, 10);
+        let x = dateToXMap.get(dateKey);
+        if (x === undefined) {
+          const tTime = new Date(t.timestamp).getTime();
+          let closestDiff = Infinity;
+          let closestIdx = 0;
+          filteredData.forEach((d, idx) => {
+            const diff = Math.abs(new Date(d.timestamp).getTime() - tTime);
+            if (diff < closestDiff) {
+              closestDiff = diff;
+              closestIdx = idx;
+            }
+          });
+          x = scaleX(closestIdx);
+        }
+        return {
+          ...t,
+          x,
+          y: scalePriceY(t.price),
+        };
+      });
+
+    const priceTicks = [0, 0.33, 0.66, 1.0].map((frac) => {
+      const val = minP + frac * (maxP - minP);
+      return {
+        val,
+        y: scalePriceY(val),
+      };
+    });
+
+    return {
+      pricePoints,
+      pricePath,
+      priceArea,
+      mappedTrades,
+      minPrice: minP,
+      maxPrice: maxP,
+      priceTicks,
+      plotHeight,
+      bottomY,
+    };
+  }, [filteredData, trades]);
+
   // Trade return distribution calculations
   const returnDistribution = useMemo(() => {
     if (!trades || trades.length < 2) return null;
@@ -651,27 +753,34 @@ export function EquityChart({
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '1.25rem',
+              justifyContent: 'space-between',
               fontSize: '0.78rem',
               marginBottom: '0.5rem',
               color: 'var(--text-secondary)',
+              flexWrap: 'wrap',
+              gap: '0.5rem',
             }}
           >
-            <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <span style={{ width: '12px', height: '2px', backgroundColor: 'var(--accent-secondary, #a855f7)' }}></span>
-              Trade Execution Prices
-            </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <span style={{ color: 'var(--profit)', fontWeight: 700 }}>▲</span> Buy Entry Orders
-            </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <span style={{ color: 'var(--loss)', fontWeight: 700 }}>▼</span> Sell Exit Orders
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <span style={{ width: '12px', height: '2px', backgroundColor: 'var(--accent-primary, #6366f1)' }}></span>
+                Asset Close Price
+              </span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <span style={{ color: 'var(--profit, #10b981)', fontWeight: 700 }}>▲</span> Buy Entry
+              </span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <span style={{ color: 'var(--loss, #ef4444)', fontWeight: 700 }}>▼</span> Sell Exit
+              </span>
+            </div>
+            <span style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)' }}>
+              Click any trade marker for order audit details
             </span>
           </div>
 
-          {trades.length === 0 ? (
+          {!priceChartData || priceChartData.pricePoints.length === 0 ? (
             <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: '0.85rem' }}>
-              No trades executed under current parameters to display on price chart.
+              No price or trade execution data available for the selected period.
             </div>
           ) : (
             <div className="chart-wrapper">
@@ -679,73 +788,174 @@ export function EquityChart({
                 viewBox={`0 0 ${WIDTH} ${EQUITY_HEIGHT}`}
                 className="equity-svg"
                 style={{ width: '100%', height: 'auto', display: 'block' }}
+                onMouseMove={handleMouseMove}
+                onMouseLeave={() => setHoverIndex(null)}
               >
-                {/* Render Trade Price Curve & Markers */}
-                {(() => {
-                  const prices = trades.map((t) => t.price);
-                  let minP = Math.min(...prices);
-                  let maxP = Math.max(...prices);
-                  const pSpan = maxP - minP || 1;
-                  minP -= pSpan * 0.1;
-                  maxP += pSpan * 0.1;
+                <defs>
+                  <linearGradient id="price-gradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="var(--accent-primary, #6366f1)" stopOpacity="0.22" />
+                    <stop offset="100%" stopColor="var(--accent-primary, #6366f1)" stopOpacity="0.0" />
+                  </linearGradient>
+                </defs>
 
-                  const plotH = EQUITY_HEIGHT - PADDING.top - PADDING.bottom;
-                  const scaleTX = (i: number) =>
-                    PADDING.left + (i / (trades.length - 1 || 1)) * CHART_WIDTH;
-                  const scaleTY = (val: number) =>
-                    PADDING.top + plotH - ((val - minP) / (maxP - minP)) * plotH;
+                {/* Horizontal price grid lines & labels */}
+                {priceChartData.priceTicks.map((tick, i) => (
+                  <g key={`ptick-${i}`}>
+                    <line
+                      x1={PADDING.left}
+                      y1={tick.y}
+                      x2={WIDTH - PADDING.right}
+                      y2={tick.y}
+                      stroke="var(--border-color, #27272a)"
+                      strokeWidth="1"
+                      strokeDasharray="3 3"
+                      opacity="0.5"
+                    />
+                    <text
+                      x={PADDING.left - 8}
+                      y={tick.y + 4}
+                      textAnchor="end"
+                      fill="var(--text-tertiary, #a1a1aa)"
+                      fontSize="10"
+                      fontFamily="var(--font-mono, monospace)"
+                    >
+                      {formatCurrency(tick.val)}
+                    </text>
+                  </g>
+                ))}
 
-                  const linePath = trades.reduce(
-                    (acc, t, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${scaleTX(i).toFixed(1)} ${scaleTY(t.price).toFixed(1)}`,
-                    ''
-                  );
+                {/* X-axis date grid lines & labels */}
+                {dateTicks.map((pt, i) => (
+                  <g key={`pdtick-${i}`}>
+                    <line
+                      x1={pt.x}
+                      y1={PADDING.top}
+                      x2={pt.x}
+                      y2={priceChartData.bottomY}
+                      stroke="var(--border-color, #27272a)"
+                      strokeWidth="1"
+                      strokeDasharray="2 4"
+                      opacity="0.3"
+                    />
+                    <text
+                      x={pt.x}
+                      y={priceChartData.bottomY + 16}
+                      textAnchor="middle"
+                      fill="var(--text-tertiary, #a1a1aa)"
+                      fontSize="10"
+                      fontFamily="var(--font-mono, monospace)"
+                    >
+                      {pt.timestamp.slice(0, 10)}
+                    </text>
+                  </g>
+                ))}
+
+                {/* Price area fill */}
+                <path d={priceChartData.priceArea} fill="url(#price-gradient)" />
+
+                {/* Price line path */}
+                <path
+                  d={priceChartData.pricePath}
+                  fill="none"
+                  stroke="var(--accent-primary, #6366f1)"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+
+                {/* Trade Execution Markers Overlay */}
+                {priceChartData.mappedTrades.map((t, idx) => {
+                  const isBuy = t.side.toLowerCase() === 'buy';
+                  const isSelected = selectedTrade === t;
 
                   return (
-                    <g>
-                      {/* Price guide line */}
-                      <path
-                        d={linePath}
-                        fill="none"
-                        stroke="var(--accent-secondary, #a855f7)"
-                        strokeWidth="1.5"
-                        strokeDasharray="3 3"
-                        opacity="0.7"
-                      />
+                    <g
+                      key={`trade-${idx}`}
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => setSelectedTrade(t)}
+                    >
+                      {/* Selection / highlight ring */}
+                      {isSelected && (
+                        <circle
+                          cx={t.x}
+                          cy={t.y}
+                          r="12"
+                          fill="none"
+                          stroke={isBuy ? 'var(--profit, #10b981)' : 'var(--loss, #ef4444)'}
+                          strokeWidth="2"
+                          opacity="0.75"
+                        />
+                      )}
 
-                      {/* Trade markers */}
-                      {trades.map((t, idx) => {
-                        const cx = scaleTX(idx);
-                        const cy = scaleTY(t.price);
-                        const isBuy = t.side.toLowerCase() === 'buy';
-
-                        return (
-                          <g
-                            key={idx}
-                            style={{ cursor: 'pointer' }}
-                            onClick={() => setSelectedTrade(t)}
-                          >
-                            {isBuy ? (
-                              <polygon
-                                points={`${cx},${cy - 8} ${cx - 6},${cy + 4} ${cx + 6},${cy + 4}`}
-                                fill="var(--profit, #10b981)"
-                                stroke="#090d16"
-                                strokeWidth="1.5"
-                              />
-                            ) : (
-                              <polygon
-                                points={`${cx},${cy + 8} ${cx - 6},${cy - 4} ${cx + 6},${cy - 4}`}
-                                fill="var(--loss, #ef4444)"
-                                stroke="#090d16"
-                                strokeWidth="1.5"
-                              />
-                            )}
-                          </g>
-                        );
-                      })}
+                      {/* Directional marker polygon */}
+                      {isBuy ? (
+                        <polygon
+                          points={`${t.x},${t.y - 10} ${t.x - 7},${t.y + 4} ${t.x + 7},${t.y + 4}`}
+                          fill="var(--profit, #10b981)"
+                          stroke="#090d16"
+                          strokeWidth="1.5"
+                        />
+                      ) : (
+                        <polygon
+                          points={`${t.x},${t.y + 10} ${t.x - 7},${t.y - 4} ${t.x + 7},${t.y - 4}`}
+                          fill="var(--loss, #ef4444)"
+                          stroke="#090d16"
+                          strokeWidth="1.5"
+                        />
+                      )}
                     </g>
                   );
-                })()}
+                })}
+
+                {/* Hover vertical crosshair & point indicator */}
+                {hoverIndex !== null && priceChartData.pricePoints[hoverIndex] && (
+                  <g>
+                    <line
+                      x1={priceChartData.pricePoints[hoverIndex].x}
+                      y1={PADDING.top}
+                      x2={priceChartData.pricePoints[hoverIndex].x}
+                      y2={priceChartData.bottomY}
+                      stroke="var(--accent-primary, #6366f1)"
+                      strokeWidth="1"
+                      strokeDasharray="3 3"
+                    />
+                    <circle
+                      cx={priceChartData.pricePoints[hoverIndex].x}
+                      cy={priceChartData.pricePoints[hoverIndex].y}
+                      r="4"
+                      fill="var(--accent-primary, #6366f1)"
+                      stroke="#090d16"
+                      strokeWidth="2"
+                    />
+                  </g>
+                )}
               </svg>
+
+              {/* Hover tooltip for price */}
+              {hoverIndex !== null && priceChartData.pricePoints[hoverIndex] && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '2.5rem',
+                    left: `${Math.min(Math.max(priceChartData.pricePoints[hoverIndex].x, 80), WIDTH - 180)}px`,
+                    backgroundColor: 'var(--bg-elevated, #18181b)',
+                    border: '1px solid var(--border-color, #27272a)',
+                    borderRadius: '6px',
+                    padding: '0.4rem 0.65rem',
+                    fontSize: '0.75rem',
+                    pointerEvents: 'none',
+                    zIndex: 10,
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                  }}
+                >
+                  <div style={{ color: 'var(--text-tertiary, #a1a1aa)', fontSize: '0.7rem' }}>
+                    {priceChartData.pricePoints[hoverIndex].timestamp.slice(0, 10)}
+                  </div>
+                  <div style={{ fontWeight: 600, color: 'var(--text-primary, #fafafa)', marginTop: '2px' }}>
+                    Close: {formatCurrency(priceChartData.pricePoints[hoverIndex].price)}
+                  </div>
+                </div>
+              )}
 
               {/* Selected Trade Card Drawer */}
               {selectedTrade && (
@@ -760,15 +970,44 @@ export function EquityChart({
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
                   }}
                 >
                   <div>
-                    <span style={{ fontWeight: 600, color: selectedTrade.side.toLowerCase() === 'buy' ? 'var(--profit)' : 'var(--loss)' }}>
-                      {selectedTrade.side.toUpperCase()}
-                    </span>{' '}
-                    at {formatCurrency(selectedTrade.price)} &bull; {selectedTrade.quantity} shares &bull; {selectedTrade.timestamp.slice(0, 19).replace('T', ' ')}
+                    <span
+                      style={{
+                        fontWeight: 700,
+                        padding: '0.15rem 0.4rem',
+                        borderRadius: '4px',
+                        backgroundColor:
+                          selectedTrade.side.toLowerCase() === 'buy'
+                            ? 'rgba(16, 185, 129, 0.15)'
+                            : 'rgba(239, 68, 68, 0.15)',
+                        color:
+                          selectedTrade.side.toLowerCase() === 'buy'
+                            ? 'var(--profit, #10b981)'
+                            : 'var(--loss, #ef4444)',
+                        marginRight: '0.5rem',
+                      }}
+                    >
+                      {selectedTrade.side.toUpperCase()} ORDER
+                    </span>
+                    at <strong>{formatCurrency(selectedTrade.price)}</strong> &bull;{' '}
+                    {selectedTrade.quantity} shares &bull;{' '}
+                    <span style={{ color: 'var(--text-secondary)' }}>
+                      {selectedTrade.timestamp.slice(0, 19).replace('T', ' ')}
+                    </span>
                     {selectedTrade.exit_reason && (
-                      <span style={{ marginLeft: '0.5rem', color: 'var(--text-tertiary)' }}>
+                      <span
+                        style={{
+                          marginLeft: '0.5rem',
+                          padding: '0.1rem 0.35rem',
+                          borderRadius: '3px',
+                          backgroundColor: 'var(--bg-surface, #27272a)',
+                          fontSize: '0.72rem',
+                          color: 'var(--text-secondary)',
+                        }}
+                      >
                         Trigger: {selectedTrade.exit_reason.replace('_', ' ')}
                       </span>
                     )}
@@ -776,7 +1015,15 @@ export function EquityChart({
                   <button
                     type="button"
                     onClick={() => setSelectedTrade(null)}
-                    style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer' }}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--text-tertiary)',
+                      cursor: 'pointer',
+                      fontSize: '1.1rem',
+                      lineHeight: 1,
+                    }}
+                    title="Close"
                   >
                     &times;
                   </button>
