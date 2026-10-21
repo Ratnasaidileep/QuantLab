@@ -1,5 +1,5 @@
-export type StrategyType = 'moving_average' | 'rsi' | 'bollinger' | 'macd';
-export type PositionSizingMode = 'unit' | 'all_in' | 'fixed_quantity';
+export type StrategyType = 'moving_average' | 'rsi' | 'bollinger' | 'macd' | 'confluence';
+export type PositionSizingMode = 'unit' | 'all_in' | 'fixed_quantity' | 'atr_fractional';
 
 export interface DatasetInfo {
   filename: string;
@@ -77,6 +77,10 @@ export interface BacktestRequest {
   macd_fast?: number;
   macd_slow?: number;
   macd_signal?: number;
+  confluence_trend_period?: number;
+  confluence_pullback_period?: number;
+  confluence_oversold?: number;
+  confluence_overbought?: number;
   initial_cash: number;
   commission_rate: number;
   slippage_rate: number;
@@ -85,6 +89,9 @@ export interface BacktestRequest {
   stop_loss_pct?: number | null;
   take_profit_pct?: number | null;
   trailing_stop_pct?: number | null;
+  atr_period?: number;
+  atr_stop_multiplier?: number | null;
+  risk_per_trade_pct?: number | null;
 }
 
 export interface BacktestResponse {
@@ -303,7 +310,12 @@ export interface TearSheetResponse {
   underwater_curve: UnderwaterPointDTO[];
 }
 
-export type AllocationWeighting = 'equal_weight' | 'inverse_volatility' | 'custom';
+export type AllocationWeighting =
+  | 'equal_weight'
+  | 'inverse_volatility'
+  | 'max_sharpe'
+  | 'min_variance'
+  | 'custom';
 export type RebalanceFrequency = 'none' | 'monthly' | 'quarterly';
 
 export interface BasketTradeDTO {
@@ -350,6 +362,67 @@ export interface BasketBacktestResponse {
   tail_risk: TailRiskDTO;
   trades: BasketTradeDTO[];
   equity_points: BasketEquityPointDTO[];
+}
+
+export interface PortfolioPointDTO {
+  expected_return: number;
+  volatility: number;
+  sharpe_ratio: number;
+  weights: Record<string, number>;
+}
+
+export interface EfficientFrontierRequest {
+  datasets: string[];
+  risk_free_rate?: number;
+  num_points?: number;
+  num_simulations?: number;
+}
+
+export interface EfficientFrontierResponse {
+  symbols: string[];
+  frontier_curve: PortfolioPointDTO[];
+  simulated_portfolios: PortfolioPointDTO[];
+  max_sharpe: PortfolioPointDTO;
+  min_variance: PortfolioPointDTO;
+  equal_weight: PortfolioPointDTO;
+  inverse_volatility: PortfolioPointDTO;
+  annualized_returns: Record<string, number>;
+  annualized_volatilities: Record<string, number>;
+}
+
+export interface BenchmarkRowDTO {
+  dataset: string;
+  symbol: string;
+  strategy_name: string;
+  configuration: string;
+  total_trades: number;
+  final_equity: number;
+  total_pnl: number;
+  total_return: number;
+  cagr: number | null;
+  sharpe_ratio: number | null;
+  sortino_ratio: number | null;
+  max_drawdown: number;
+  calmar_ratio: number | null;
+  win_rate: number | null;
+  profit_factor: number | null;
+}
+
+export interface BenchmarkMatrixRequest {
+  datasets?: string[];
+  initial_cash?: number;
+  commission_rate?: number;
+  slippage_rate?: number;
+  risk_free_rate?: number;
+}
+
+export interface BenchmarkMatrixResponse {
+  rows: BenchmarkRowDTO[];
+  datasets: string[];
+  strategies: string[];
+  markdown_table: string;
+  latex_table: string;
+  csv_table: string;
 }
 
 export interface UserDTO {

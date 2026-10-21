@@ -2,6 +2,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 
+from quantlab.analytics.benchmark_suite import generate_benchmark_matrix
 from quantlab.analytics.monte_carlo import run_monte_carlo_simulation
 from quantlab.analytics.tear_sheet import generate_tear_sheet
 from quantlab.analytics.walk_forward import (
@@ -9,6 +10,9 @@ from quantlab.analytics.walk_forward import (
     run_walk_forward_optimization,
 )
 from quantlab.api.schemas import (
+    BenchmarkMatrixRequest,
+    BenchmarkMatrixResponse,
+    BenchmarkRowDTO,
     DrawdownHistogramBinDTO,
     MetricsDTO,
     MonteCarloPointDTO,
@@ -32,6 +36,7 @@ from quantlab.backtest.engine import Backtest
 from quantlab.config import settings
 from quantlab.data.csv_loader import load_bars_from_csv
 from quantlab.strategy.bollinger import BollingerBandsStrategy
+from quantlab.strategy.confluence import ConfluenceStrategy
 from quantlab.strategy.macd import MACDStrategy
 from quantlab.strategy.moving_average import MovingAverageCrossover
 from quantlab.strategy.rsi import RSIStrategy
@@ -259,6 +264,19 @@ def generate_tear_sheet_report(request: TearSheetRequest) -> TearSheetResponse:
         configuration = (
             f"Fast {request.macd_fast} / Slow {request.macd_slow} / Signal {request.macd_signal}"
         )
+    elif request.strategy == StrategyType.CONFLUENCE:
+        strategy = ConfluenceStrategy(
+            trend_period=request.confluence_trend_period,
+            pullback_period=request.confluence_pullback_period,
+            oversold=request.confluence_oversold,
+            overbought=request.confluence_overbought,
+        )
+        use_crossover = False
+        strategy_name = "Confluence"
+        configuration = (
+            f"Trend EMA {request.confluence_trend_period} / "
+            f"RSI {request.confluence_pullback_period} ({request.confluence_oversold:g}/{request.confluence_overbought:g})"
+        )
     else:
         raise HTTPException(
             status_code=400,
@@ -426,6 +444,19 @@ def monte_carlo_analysis(request: MonteCarloRequest) -> MonteCarloResponse:
         configuration = (
             f"Fast {request.macd_fast} / Slow {request.macd_slow} / Signal {request.macd_signal}"
         )
+    elif request.strategy == StrategyType.CONFLUENCE:
+        strategy = ConfluenceStrategy(
+            trend_period=request.confluence_trend_period,
+            pullback_period=request.confluence_pullback_period,
+            oversold=request.confluence_oversold,
+            overbought=request.confluence_overbought,
+        )
+        use_crossover = False
+        strategy_name = "Confluence"
+        configuration = (
+            f"Trend EMA {request.confluence_trend_period} / "
+            f"RSI {request.confluence_pullback_period} ({request.confluence_oversold:g}/{request.confluence_overbought:g})"
+        )
     else:
         raise HTTPException(
             status_code=400,
@@ -515,5 +546,52 @@ def monte_carlo_analysis(request: MonteCarloRequest) -> MonteCarloResponse:
         summary=summary_dto,
         confidence_cone=cone_dto,
         drawdown_histogram=hist_dto,
+    )
+
+@router.post("/benchmark-matrix", response_model=BenchmarkMatrixResponse)
+def compute_benchmark_matrix(request: BenchmarkMatrixRequest) -> BenchmarkMatrixResponse:
+    """Execute cross-strategy, cross-dataset benchmark evaluation matrix."""
+    try:
+        matrix_result = generate_benchmark_matrix(
+            datasets=request.datasets,
+            initial_cash=request.initial_cash,
+            commission_rate=request.commission_rate,
+            slippage_rate=request.slippage_rate,
+        )
+    except FileNotFoundError as err:
+        raise HTTPException(status_code=404, detail=str(err)) from err
+    except ValueError as err:
+        raise HTTPException(status_code=400, detail=str(err)) from err
+    except Exception as err:
+        raise HTTPException(status_code=500, detail=f"Benchmark matrix computation error: {err}") from err
+
+    rows_dto = [
+        BenchmarkRowDTO(
+            dataset=r.dataset,
+            symbol=r.symbol,
+            strategy_name=r.strategy_name,
+            configuration=r.configuration,
+            total_trades=r.total_trades,
+            final_equity=round(r.final_equity, 2),
+            total_pnl=round(r.total_pnl, 2),
+            total_return=round(r.total_return, 4),
+            cagr=round(r.cagr, 4) if r.cagr is not None else None,
+            sharpe_ratio=round(r.sharpe_ratio, 4) if r.sharpe_ratio is not None else None,
+            sortino_ratio=round(r.sortino_ratio, 4) if r.sortino_ratio is not None else None,
+            max_drawdown=round(r.max_drawdown, 4),
+            calmar_ratio=round(r.calmar_ratio, 4) if r.calmar_ratio is not None else None,
+            win_rate=round(r.win_rate, 4) if r.win_rate is not None else None,
+            profit_factor=round(r.profit_factor, 4) if r.profit_factor is not None else None,
+        )
+        for r in matrix_result.rows
+    ]
+
+    return BenchmarkMatrixResponse(
+        rows=rows_dto,
+        datasets=matrix_result.datasets,
+        strategies=matrix_result.strategies,
+        markdown_table=matrix_result.to_markdown(),
+        latex_table=matrix_result.to_latex(),
+        csv_table=matrix_result.to_csv(),
     )
 

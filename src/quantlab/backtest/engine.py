@@ -7,6 +7,7 @@ from quantlab.analytics.metrics import PerformanceMetrics, calculate_metrics
 from quantlab.backtest.models import Trade, TradeSide
 from quantlab.data.models import Bar
 from quantlab.data.validation import validate_bar
+from quantlab.execution.atr import calculate_atr_series
 from quantlab.portfolio.manager import Portfolio
 from quantlab.strategy.base import Strategy
 from quantlab.strategy.models import Signal
@@ -44,6 +45,9 @@ class Backtest:
         stop_loss_pct: float | None = None,
         take_profit_pct: float | None = None,
         trailing_stop_pct: float | None = None,
+        atr_period: int = 14,
+        atr_stop_multiplier: float | None = None,
+        risk_per_trade_pct: float | None = None,
     ) -> None:
         if initial_cash < 0:
             raise ValueError("Initial cash cannot be negative.")
@@ -54,9 +58,9 @@ class Backtest:
         if slippage_rate < 0:
             raise ValueError("Slippage rate cannot be negative.")
 
-        if sizing_mode not in ("unit", "fixed_quantity", "all_in"):
+        if sizing_mode not in ("unit", "fixed_quantity", "all_in", "atr_fractional"):
             raise ValueError(
-                f"Unsupported sizing mode '{sizing_mode}'. Supported modes: 'unit', 'fixed_quantity', 'all_in'."
+                f"Unsupported sizing mode '{sizing_mode}'. Supported modes: 'unit', 'fixed_quantity', 'all_in', 'atr_fractional'."
             )
 
         if quantity_per_trade <= 0:
@@ -70,6 +74,15 @@ class Backtest:
 
         if trailing_stop_pct is not None and trailing_stop_pct <= 0:
             raise ValueError("trailing_stop_pct must be strictly positive.")
+
+        if atr_period < 1:
+            raise ValueError("atr_period must be at least 1.")
+
+        if atr_stop_multiplier is not None and atr_stop_multiplier <= 0:
+            raise ValueError("atr_stop_multiplier must be strictly positive.")
+
+        if risk_per_trade_pct is not None and not (0 < risk_per_trade_pct <= 1.0):
+            raise ValueError("risk_per_trade_pct must be between 0 and 1.0.")
 
         self.initial_cash = initial_cash
         self.cash = initial_cash
@@ -86,6 +99,9 @@ class Backtest:
         self.stop_loss_pct = stop_loss_pct
         self.take_profit_pct = take_profit_pct
         self.trailing_stop_pct = trailing_stop_pct
+        self.atr_period = atr_period
+        self.atr_stop_multiplier = atr_stop_multiplier
+        self.risk_per_trade_pct = risk_per_trade_pct
 
     @property
     def position(self):
@@ -93,7 +109,7 @@ class Backtest:
 
     def run(self, bars: Sequence[Bar]) -> BacktestResult:
         # Validate all bars before changing backtest state.
-        for bar in bars:
+        for idx, bar in enumerate(bars):
             validate_bar(bar)
 
         # Ensure bars are in chronological order.
@@ -110,6 +126,7 @@ class Backtest:
         prices: list[float] = []
         equity_curve: list[float] = []
         trades: list[Trade] = []
+        atr_series = calculate_atr_series(bars, period=self.atr_period)
 
         pending_signal = Signal.FLAT
         last_close: float | None = None
@@ -135,6 +152,18 @@ class Backtest:
                             if cost_per_unit > 0
                             else 0.0
                         )
+                    elif self.sizing_mode == "atr_fractional":
+                        prev_atr = atr_series[idx - 1] if idx > 0 else None
+                        if prev_atr is not None and prev_atr > 0 and cost_per_unit > 0:
+                            k = self.atr_stop_multiplier or 2.0
+                            risk_pct = self.risk_per_trade_pct or 0.01
+                            risk_dollars = self.cash * risk_pct
+                            stop_dist = k * prev_atr
+                            calculated_qty = float(int(risk_dollars // stop_dist)) if stop_dist > 0 else 1.0
+                            max_affordable = float(int(self.cash // cost_per_unit))
+                            trade_quantity = max(0.0, min(calculated_qty, max_affordable))
+                        else:
+                            trade_quantity = 1.0
 
                     total_cost = trade_quantity * cost_per_unit
                     commission = (
@@ -187,15 +216,21 @@ class Backtest:
                 current_peak = peak_price if peak_price is not None else bar.open
 
                 sl_barrier: float | None = None
+                exit_reason = "stop_loss"
                 if self.stop_loss_pct is not None:
                     sl_barrier = entry_price * (1.0 - self.stop_loss_pct)
                 if self.trailing_stop_pct is not None:
                     trail_barrier = current_peak * (1.0 - self.trailing_stop_pct)
-                    sl_barrier = (
-                        max(sl_barrier, trail_barrier)
-                        if sl_barrier is not None
-                        else trail_barrier
-                    )
+                    if sl_barrier is None or trail_barrier > sl_barrier:
+                        sl_barrier = trail_barrier
+                        exit_reason = "stop_loss"
+                if self.atr_stop_multiplier is not None:
+                    prev_atr = atr_series[idx - 1] if idx > 0 else None
+                    if prev_atr is not None and prev_atr > 0:
+                        atr_barrier = current_peak - (self.atr_stop_multiplier * prev_atr)
+                        if sl_barrier is None or atr_barrier > sl_barrier:
+                            sl_barrier = atr_barrier
+                            exit_reason = "atr_trailing_stop" 
 
                 tp_barrier: float | None = None
                 if self.take_profit_pct is not None:
@@ -225,7 +260,7 @@ class Backtest:
                             price=exit_price,
                             quantity=quantity,
                             commission=commission,
-                            exit_reason="stop_loss",
+                            exit_reason=exit_reason,
                         )
                     )
 

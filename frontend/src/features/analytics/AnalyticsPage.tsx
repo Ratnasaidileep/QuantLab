@@ -2,13 +2,14 @@ import { useState } from 'react';
 import { useBacktest } from '../../hooks/useBacktest';
 import { TearSheetPanel } from '../../components/TearSheetPanel';
 import { MonteCarloPanel } from '../../components/MonteCarloPanel';
+import { BenchmarkPanel } from '../../components/BenchmarkPanel';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
-import { BarChart3, ShieldAlert, Database, Dice5 } from 'lucide-react';
+import { BarChart3, ShieldAlert, Database, Dice5, GraduationCap } from 'lucide-react';
 
 export function AnalyticsPage() {
   const { config, setConfig, datasets } = useBacktest();
-  const [activeTab, setActiveTab] = useState<'tear_sheet' | 'monte_carlo'>('tear_sheet');
+  const [activeTab, setActiveTab] = useState<'tear_sheet' | 'monte_carlo' | 'benchmark'>('tear_sheet');
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
@@ -28,19 +29,25 @@ export function AnalyticsPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             {activeTab === 'tear_sheet' ? (
               <BarChart3 size={22} style={{ color: 'var(--accent-primary)' }} />
-            ) : (
+            ) : activeTab === 'monte_carlo' ? (
               <Dice5 size={22} style={{ color: 'var(--accent-primary)' }} />
+            ) : (
+              <GraduationCap size={22} style={{ color: 'var(--accent-primary)' }} />
             )}
             <h1 style={{ fontSize: '1.4rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
               {activeTab === 'tear_sheet'
                 ? 'Risk Tear-Sheet & Tail Risk Analytics'
-                : 'Monte Carlo Simulation & Confidence Bands'}
+                : activeTab === 'monte_carlo'
+                  ? 'Monte Carlo Simulation & Confidence Bands'
+                  : 'Academic Evaluation Benchmark Suite'}
             </h1>
           </div>
           <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', margin: '0.25rem 0 0 0' }}>
             {activeTab === 'tear_sheet'
               ? 'PyFolio-grade risk diagnostics: Historical & Parametric VaR, Expected Shortfall (CVaR), Skewness, Kurtosis, and monthly calendar matrices.'
-              : 'Resample trade sequences up to 3,000 synthetic paths to diagnose sequence risk, probability of ruin, and percentile confidence cones.'}
+              : activeTab === 'monte_carlo'
+                ? 'Resample trade sequences up to 3,000 synthetic paths to diagnose sequence risk, probability of ruin, and percentile confidence cones.'
+                : 'Automated cross-strategy, cross-dataset benchmark matrix generating publication-ready Markdown and LaTeX (booktabs) tables for academic defense.'}
           </p>
         </div>
 
@@ -126,6 +133,28 @@ export function AnalyticsPage() {
           <Dice5 size={15} />
           <span>Monte Carlo Simulation</span>
         </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('benchmark')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.4rem',
+            padding: '0.45rem 0.9rem',
+            borderRadius: '6px',
+            fontSize: '0.82rem',
+            fontWeight: activeTab === 'benchmark' ? 600 : 500,
+            border: 'none',
+            cursor: 'pointer',
+            backgroundColor: activeTab === 'benchmark' ? 'rgba(56, 189, 248, 0.15)' : 'transparent',
+            color: activeTab === 'benchmark' ? 'var(--accent-primary)' : 'var(--text-secondary)',
+            transition: 'all var(--transition-fast)',
+          }}
+        >
+          <GraduationCap size={15} />
+          <span>Academic Benchmark Suite</span>
+        </button>
       </div>
 
       {/* Methodology Context Card */}
@@ -150,10 +179,15 @@ export function AnalyticsPage() {
               <strong style={{ color: 'var(--text-primary)' }}>Risk Philosophy: </strong>
               Standard deviation alone assumes Gaussian normality. QuantLab evaluates <strong>fat-tailed distributions</strong> using 95% and 99% Expected Shortfall (CVaR), capturing catastrophic drawdowns where conventional models fail.
             </>
-          ) : (
+          ) : activeTab === 'monte_carlo' ? (
             <>
               <strong style={{ color: 'var(--text-primary)' }}>Sequence Risk Philosophy: </strong>
               A backtest only samples one historical ordering of trades. Monte Carlo simulation shuffles and resamples trades over <strong>1,000+ synthetic paths</strong> to ensure your Sharpe ratio isn't merely the byproduct of a fortunate trade order.
+            </>
+          ) : (
+            <>
+              <strong style={{ color: 'var(--text-primary)' }}>Empirical Academic Philosophy: </strong>
+              A strategy that succeeds on only one ticker is prone to over-fitting. The Academic Benchmark Suite executes <strong>cross-asset, cross-strategy evaluation</strong> against Buy &amp; Hold and exports publication-ready LaTeX/Markdown tables for peer-reviewed defense.
             </>
           )}
         </div>
@@ -170,7 +204,7 @@ export function AnalyticsPage() {
             sizingMode={config.sizing_mode}
             quantityPerTrade={config.quantity_per_trade}
           />
-        ) : (
+        ) : activeTab === 'monte_carlo' ? (
           <MonteCarloPanel
             dataset={config.dataset}
             initialCash={config.initial_cash}
@@ -179,9 +213,15 @@ export function AnalyticsPage() {
             sizingMode={config.sizing_mode}
             quantityPerTrade={config.quantity_per_trade}
           />
+        ) : (
+          <BenchmarkPanel
+            datasets={datasets}
+            defaultInitialCash={config.initial_cash}
+            defaultCommissionRate={config.commission_rate}
+            defaultSlippageRate={config.slippage_rate}
+          />
         )}
       </Card>
     </div>
   );
 }
-

@@ -5,9 +5,13 @@ import type {
   BasketBacktestRequest,
   BasketBacktestResponse,
   BatchFetchDatasetsResponse,
+  BenchmarkMatrixRequest,
+  BenchmarkMatrixResponse,
   ComparisonResponse,
   DatasetInfo,
   DatasetUploadResponse,
+  EfficientFrontierRequest,
+  EfficientFrontierResponse,
   ExperimentDetailDTO,
   ExperimentListResponse,
   MonteCarloRequest,
@@ -504,4 +508,57 @@ export async function executeBasketBacktest(
   return response.json();
 }
 
+export async function fetchEfficientFrontier(
+  request: EfficientFrontierRequest,
+): Promise<EfficientFrontierResponse> {
+  const response = await fetch(`${API_BASE}/basket/efficient-frontier`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    let message = 'Efficient Frontier optimization failed.';
+    if (errorData.detail) {
+      if (typeof errorData.detail === 'string') {
+        message = errorData.detail;
+      } else if (Array.isArray(errorData.detail)) {
+        message = errorData.detail.map((e: { msg?: string }) => e.msg || '').join('; ');
+      }
+    }
+    throw new Error(message);
+  }
+
+  return response.json();
+}
+
+export async function fetchBenchmarkMatrix(
+  request: BenchmarkMatrixRequest,
+): Promise<BenchmarkMatrixResponse> {
+  const response = await fetch(`${API_BASE}/analytics/benchmark-matrix`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    let message = 'Academic benchmark suite execution failed.';
+    if (errorData.detail) {
+      if (typeof errorData.detail === 'string') {
+        message = errorData.detail;
+      } else if (Array.isArray(errorData.detail)) {
+        message = errorData.detail.map((e: { msg?: string }) => e.msg || '').join('; ');
+      }
+    }
+    throw new Error(message);
+  }
+
+  return response.json();
+}
 

@@ -39,6 +39,8 @@ class AllocationWeighting(str, Enum):
 
     EQUAL_WEIGHT = "equal_weight"
     INVERSE_VOLATILITY = "inverse_volatility"
+    MAX_SHARPE = "max_sharpe"
+    MIN_VARIANCE = "min_variance"
     CUSTOM = "custom"
 
 
@@ -162,6 +164,13 @@ class BasketBacktestEngine:
                 inv_vols[sym] = 1.0 / max(vol, 1e-4)
             total_inv = sum(inv_vols.values())
             return {sym: v / total_inv for sym, v in inv_vols.items()}
+
+        if self.weighting in (AllocationWeighting.MAX_SHARPE, AllocationWeighting.MIN_VARIANCE):
+            from quantlab.portfolio.optimizer import generate_efficient_frontier
+            frontier = generate_efficient_frontier(symbols=symbols, data=data, risk_free_rate=self.risk_free_rate)
+            if self.weighting == AllocationWeighting.MAX_SHARPE:
+                return frontier.max_sharpe.weights
+            return frontier.min_variance.weights
 
         raise ValueError(f"Unsupported allocation weighting: {self.weighting}")
 

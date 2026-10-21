@@ -145,6 +145,30 @@ def test_backtest_macd_strategy_success(client: TestClient):
     assert data["metrics"] is not None
 
 
+def test_backtest_confluence_strategy_success(client: TestClient):
+    payload = {
+        "dataset": "reliance_daily.csv",
+        "strategy": "confluence",
+        "confluence_trend_period": 50,
+        "confluence_pullback_period": 14,
+        "confluence_oversold": 35.0,
+        "confluence_overbought": 65.0,
+        "initial_cash": 100000.0,
+        "commission_rate": 0.001,
+        "slippage_rate": 0.001,
+        "sizing_mode": "unit",
+    }
+    response = client.post("/api/v1/backtest", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["strategy_name"] == "Confluence"
+    assert "Trend EMA 50" in data["configuration"]
+    assert data["bars_processed"] == 441
+    assert len(data["equity_curve"]) == 441
+    assert data["metrics"] is not None
+
+
 def test_backtest_macd_invalid_parameters(client: TestClient):
     payload = {
         "dataset": "reliance_daily.csv",
@@ -711,4 +735,42 @@ def test_basket_endpoint_missing_dataset(client: TestClient):
     assert response.status_code == 404
 
 
+def test_basket_endpoint_max_sharpe(client: TestClient):
+    payload = {
+        "datasets": ["reliance_daily.csv", "tcs_daily.csv"],
+        "weighting": "max_sharpe",
+        "initial_cash": 100000.0,
+    }
+    response = client.post("/api/v1/basket", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert abs(sum(data["asset_weights"].values()) - 1.0) < 1e-3
 
+
+def test_basket_endpoint_min_variance(client: TestClient):
+    payload = {
+        "datasets": ["reliance_daily.csv", "tcs_daily.csv"],
+        "weighting": "min_variance",
+        "initial_cash": 100000.0,
+    }
+    response = client.post("/api/v1/basket", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert abs(sum(data["asset_weights"].values()) - 1.0) < 1e-3
+
+
+def test_efficient_frontier_endpoint_success(client: TestClient):
+    payload = {
+        "datasets": ["reliance_daily.csv", "tcs_daily.csv"],
+        "num_points": 10,
+        "num_simulations": 50,
+    }
+    response = client.post("/api/v1/basket/efficient-frontier", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert "frontier_curve" in data
+    assert len(data["frontier_curve"]) >= 5
+    assert len(data["simulated_portfolios"]) == 50
+    assert "max_sharpe" in data
+    assert "min_variance" in data
+    assert data["max_sharpe"]["sharpe_ratio"] >= data["min_variance"]["sharpe_ratio"]

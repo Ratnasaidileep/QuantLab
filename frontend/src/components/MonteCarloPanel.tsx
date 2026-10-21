@@ -200,6 +200,7 @@ export function MonteCarloPanel({
               <option value="rsi">RSI Mean-Reversion</option>
               <option value="bollinger">Bollinger Bands</option>
               <option value="macd">MACD Trend</option>
+              <option value="confluence">Confluence (Trend + Momentum)</option>
             </select>
           </div>
 

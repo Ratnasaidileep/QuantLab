@@ -39,6 +39,7 @@ from quantlab.storage.repository import (
     save_experiment,
 )
 from quantlab.strategy.bollinger import BollingerBandsStrategy
+from quantlab.strategy.confluence import ConfluenceStrategy
 from quantlab.strategy.macd import MACDStrategy
 from quantlab.strategy.moving_average import MovingAverageCrossover
 from quantlab.strategy.rsi import RSIStrategy
@@ -127,7 +128,7 @@ st.sidebar.header("Backtest Configuration")
 
 selected_strategy = st.sidebar.selectbox(
     "Trading Strategy",
-    ["Moving Average Crossover", "RSI", "Bollinger Bands", "MACD"],
+    ["Moving Average Crossover", "RSI", "Bollinger Bands", "MACD", "Confluence (Trend + Momentum)"],
 )
 
 initial_cash = st.sidebar.number_input(
@@ -136,6 +137,14 @@ initial_cash = st.sidebar.number_input(
     value=100000.0,
     step=5000.0,
 )
+
+confluence_trend = 50
+confluence_pullback = 14
+confluence_oversold = 35.0
+confluence_overbought = 65.0
+atr_period_val = 14
+risk_trade_pct = None
+atr_mult = None
 
 if selected_strategy == "Moving Average Crossover":
     fast_period = st.sidebar.number_input(
@@ -205,7 +214,7 @@ elif selected_strategy == "Bollinger Bands":
     )
     st.sidebar.caption("Statistical Mean Reversion: Buy at Lower Band (μ - kσ), exit at Middle SMA (μ).")
 
-else:
+elif selected_strategy == "MACD":
     macd_fast = st.sidebar.number_input(
         "Fast EMA Period",
         min_value=1,
@@ -231,7 +240,7 @@ else:
 
 sizing_label = st.sidebar.selectbox(
     "Position Sizing",
-    ["Unit Trade (1 share)", "Full Capital (All-in)", "Fixed Quantity"],
+    ["Unit Trade (1 share)", "Full Capital (All-in)", "Fixed Quantity", "ATR Volatility Sizing"],
 )
 
 if sizing_label == "Unit Trade (1 share)":
@@ -240,7 +249,7 @@ if sizing_label == "Unit Trade (1 share)":
 elif sizing_label == "Full Capital (All-in)":
     sizing_mode = "all_in"
     quantity_per_trade = 1.0
-else:
+elif sizing_label == "Fixed Quantity":
     sizing_mode = "fixed_quantity"
     quantity_per_trade = st.sidebar.number_input(
         "Shares per Trade",
@@ -248,6 +257,11 @@ else:
         value=10.0,
         step=1.0,
     )
+else:
+    sizing_mode = "atr_fractional"
+    quantity_per_trade = 1.0
+    risk_trade_pct = st.sidebar.number_input("Risk per Trade (%)", min_value=0.1, max_value=10.0, value=1.0, step=0.5) / 100.0
+    atr_period_val = st.sidebar.number_input("ATR Period", min_value=1, max_value=100, value=14, step=1)
 
 commission_rate = st.sidebar.number_input(
     "Commission Rate",
@@ -284,6 +298,13 @@ with st.sidebar.expander("🛡️ Risk Management (Stop-Loss / Take-Profit)", ex
     trail_pct = (
         st.number_input("Trailing Stop (%)", min_value=0.1, max_value=50.0, value=8.0, step=0.5, key="sb_trail_pct")
         if enable_trail
+        else None
+    )
+
+    enable_atr_stop = st.checkbox("Enable ATR Dynamic Trailing Stop", value=False, key="sb_enable_atr_stop")
+    atr_mult = (
+        st.number_input("ATR Multiplier (k × ATR)", min_value=0.5, max_value=10.0, value=2.0, step=0.5, key="sb_atr_mult")
+        if enable_atr_stop
         else None
     )
 
@@ -340,13 +361,22 @@ if run_backtest:
             )
             use_crossover = False
 
-        else:
+        elif selected_strategy == "MACD":
             strategy = MACDStrategy(
                 fast_period=int(macd_fast),
                 slow_period=int(macd_slow),
                 signal_period=int(macd_signal),
             )
             use_crossover = True
+
+        else:
+            strategy = ConfluenceStrategy(
+                trend_period=int(confluence_trend),
+                pullback_period=int(confluence_pullback),
+                oversold=float(confluence_oversold),
+                overbought=float(confluence_overbought),
+            )
+            use_crossover = False
 
         backtest = Backtest(
             initial_cash=initial_cash,
@@ -359,6 +389,9 @@ if run_backtest:
             stop_loss_pct=stop_loss_rate,
             take_profit_pct=take_profit_rate,
             trailing_stop_pct=trailing_stop_rate,
+            atr_period=int(atr_period_val),
+            atr_stop_multiplier=atr_mult,
+            risk_per_trade_pct=risk_trade_pct,
         )
 
         result = backtest.run(bars)
@@ -1354,7 +1387,7 @@ with analytics_tab_history:
         hist_datasets,
         key="hist_filter_ds",
     )
-    hist_strategies = ["All", "moving_average", "rsi", "bollinger", "macd"]
+    hist_strategies = ["All", "moving_average", "rsi", "bollinger", "macd", "confluence"]
     selected_hist_strategy = filter_c2.selectbox(
         "Filter by Strategy",
         hist_strategies,

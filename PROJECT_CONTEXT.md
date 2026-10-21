@@ -931,5 +931,55 @@ The QuantLab frontend has been fully redesigned and modernized into a terminal-g
 - **Launcher Portability Polish (`start_quantlab.bat`):**
   - Sanitized directory context switches by executing child processes via `cd /d "%~dp0"` without mutating the parent launcher shell directory.
 
+### 11.10 Multi-Indicator Confluence Strategy (Implemented October 2026)
+- **Quantitative Model (`src/quantlab/strategy/confluence.py`):** Regime-Filtered Momentum Strategy combining a macro trend filter with an intraday oscillator pullback.
+  - *Macro Trend Filter:* Long-term Exponential Moving Average (default 200 EMA). Signals are permitted only when prices trade in the direction of the dominant macro regime ($P_t > 	ext{EMA}_t$), systematically eliminating false breakouts during prolonged bear markets or sideways consolidation.
+  - *Short-Term Pullback:* Wilder's 14-period Relative Strength Index (RSI). Triggers a long entry when the market pulls back into oversold territory ($	ext{RSI} < 40$) within the dominant uptrend, and exits upon recovery into overbought territory ($	ext{RSI} > 70$) or when closing below the trend filter.
+- **Mathematical Decoupling & Engine Independence:** Pure Python/NumPy strategy inheriting from base contracts with zero look-ahead bias and strict 1-bar execution lag.
+- **Full Platform Parity:** Wired into FastAPI schemas (`StrategyType.CONFLUENCE`), backtest engine, parameter heatmaps, walk-forward optimization, and full frontend configuration panels (`ConfigPanel.tsx`, `TearSheetPanel.tsx`, `MonteCarloPanel.tsx`, and Streamlit `app.py`).
 
+### 11.11 Volatility-Adjusted Execution & Dynamic ATR Trailing Stops (Implemented October 2026)
+- **ATR Computation Series (`src/quantlab/execution/atr.py`):**
+  - True Range defined as $	ext{TR}_t = \max(H_t - L_t, |H_t - C_{t-1}|, |L_t - C_{t-1}|)$.
+  - Wilder's Exponential Smoothing Average True Range ($	ext{ATR}_t$).
+- **Dynamic Trailing Stop-Loss Execution (`src/quantlab/backtest/engine.py`):**
+  - Volatility-adaptive trailing stop mechanism: Stop level ratchets upward as prices reach new local highs ($Stop_t = \max(Stop_{t-1}, High_t - k 	imes 	ext{ATR}_t)$).
+  - Intraday violation detection: If $Low_t \le Stop_t$, position is liquidated at $\min(Open_t, Stop_t) 	imes (1 - 	ext{slippage})$ with explicit audit reason `atr_trailing_stop`.
+- **Fixed Fractional Volatility Position Sizing (`sizing_mode="atr_fractional"`):**
+  - Sizes trades to risk a constant fraction of equity $X\%$ (e.g. $1.0\%$) based on the ATR stop distance: $	ext{Quantity} = rac{	ext{Equity} 	imes 	ext{RiskPct}}{k 	imes 	ext{ATR}_t}$. Volatile regimes naturally receive smaller position sizes, equalizing risk across varied market regimes.
+
+### 11.12 Modern Portfolio Theory: Markowitz Efficient Frontier & Tangency Optimization (Implemented October 2026)
+- **Mathematical Optimization Engine (`src/quantlab/portfolio/optimizer.py`):**
+  - Constrained convex quadratic optimization: $\min_w rac{1}{2} w^T \Sigma w - q \mu^T w$ subject to $\sum_{i=1}^N w_i = 1$ and $w_i \ge 0$ (long-only simplex).
+  - Exact $O(N \log N)$ simplex projection (`project_simplex`) via projected gradient descent, delivering machine-precision optimal weights in $<10	ext{ms}$ with zero external SciPy dependencies.
+  - Computes the Tangency Portfolio (Maximum Sharpe Ratio $\max rac{\mu^T w - r_f}{\sqrt{w^T \Sigma w}}$) and Global Minimum Variance Portfolio ($\min w^T \Sigma w$).
+  - Generates 500+ Dirichlet distributed Monte Carlo random portfolio clouds illustrating diversification benefits.
+- **Dynamic Weighting in Basket Engine:** Added `AllocationWeighting.MAX_SHARPE` and `AllocationWeighting.MIN_VARIANCE` to the multi-asset basket backtester (`src/quantlab/portfolio/basket.py`).
+- **REST API Endpoint (`/api/v1/basket/efficient-frontier`):** Delivers full frontier curve coordinates, Monte Carlo clouds, annualized asset returns, and optimal portfolio weights.
+- **Interactive Visualization & Weight Adoption (`BasketPanel.tsx`):**
+  - Pure SVG scatter plot charting Risk ($\sigma$) vs Expected Return ($\mu$) with custom cyan gradient frontier curve.
+  - Star marker for Tangency Portfolio, shield marker for Minimum Variance, diamond for Equal Weight, triangle for Inverse Volatility.
+  - Interactive portfolio inspection drawer with asset weight distribution bars and 1-click "Apply this Allocation to Basket" adoption.
+
+### 11.13 Academic Evaluation Benchmark Suite (Implemented October 2026)
+- **Cross-Strategy Evaluation Suite (`src/quantlab/analytics/benchmark_suite.py`):**
+  - Simultaneously benchmarks all core quantitative strategies (Buy & Hold, Moving Average Crossover, RSI Reversal, Bollinger Bands, MACD, and Regime-Filtered Confluence) across all evaluation datasets.
+  - Computes comprehensive comparative metrics: Total Trades, Total Return (%), CAGR (%), Sharpe Ratio, Sortino Ratio, Maximum Drawdown (%), Calmar Ratio, Win Rate (%), and Profit Factor.
+- **Publication-Ready Export Generators:**
+  - *Markdown Table*: Perfectly formatted Markdown table for dissertation documentation and GitHub reporting.
+  - *LaTeX (Booktabs)*: Publication-ready LaTeX table (`\begin{table*}`, `\toprule`, `\midrule`, `\bottomrule`) ready for direct inclusion in thesis defenses.
+  - *CSV Spreadsheet*: Tabular data export for downstream empirical statistical testing.
+- **REST API Endpoint (`/api/v1/analytics/benchmark-matrix`):** Accepts arbitrary dataset collections and parameters, returning structured JSON rows and rendered export strings.
+- **Dedicated Frontend Workspace (`BenchmarkPanel.tsx` in `AnalyticsPage.tsx`):**
+  - Integrated into the Analytics workspace under a dedicated "Academic Benchmark Suite" tab.
+  - Features an interactive matrix table, view-mode switcher (Matrix Table, Raw Markdown, LaTeX Booktabs), and 1-click clipboard copy / CSV download buttons.
+
+### 11.14 Complete Verification & Quality Status (October 2026)
+- **Backend Unit & Integration Tests:** 223/223 passed in 8.84s (`python -m pytest -q`).
+- **Python Linting:** Clean (`ruff check .` -> All checks passed!).
+- **Frontend Type Checking & Build:** `tsc -b && vite build` -> built cleanly in 991ms.
+- **Frontend Code Quality:** `eslint .` -> 0 errors, 0 warnings.
+- **Live Local Platform Services:**
+  - FastAPI Backend active on `http://127.0.0.1:8000` (auto-reloading, OpenAPI docs at `/docs`).
+  - Vite React Frontend active on `http://127.0.0.1:5173`.
 

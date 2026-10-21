@@ -20,11 +20,18 @@ export const DEFAULT_CONFIG: BacktestRequest = {
   macd_fast: 12,
   macd_slow: 26,
   macd_signal: 9,
+  confluence_trend_period: 50,
+  confluence_pullback_period: 14,
+  confluence_oversold: 35.0,
+  confluence_overbought: 65.0,
   initial_cash: 100_000.0,
   commission_rate: 0.001,
   slippage_rate: 0.001,
   sizing_mode: 'unit',
   quantity_per_trade: 1.0,
+  atr_period: 14,
+  atr_stop_multiplier: null,
+  risk_per_trade_pct: null,
 };
 
 export interface BacktestContextType {

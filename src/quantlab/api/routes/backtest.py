@@ -14,6 +14,7 @@ from quantlab.backtest.engine import Backtest
 from quantlab.config import settings
 from quantlab.data.csv_loader import load_bars_from_csv
 from quantlab.strategy.bollinger import BollingerBandsStrategy
+from quantlab.strategy.confluence import ConfluenceStrategy
 from quantlab.strategy.macd import MACDStrategy
 from quantlab.strategy.moving_average import MovingAverageCrossover
 from quantlab.strategy.rsi import RSIStrategy
@@ -91,6 +92,19 @@ def run_backtest(request: BacktestRequest) -> BacktestResponse:
         configuration = (
             f"Fast {request.macd_fast} / Slow {request.macd_slow} / Signal {request.macd_signal}"
         )
+    elif request.strategy == StrategyType.CONFLUENCE:
+        strategy = ConfluenceStrategy(
+            trend_period=request.confluence_trend_period,
+            pullback_period=request.confluence_pullback_period,
+            oversold=request.confluence_oversold,
+            overbought=request.confluence_overbought,
+        )
+        use_crossover = False
+        strategy_name = "Confluence"
+        configuration = (
+            f"Trend EMA {request.confluence_trend_period} / "
+            f"RSI {request.confluence_pullback_period} ({request.confluence_oversold:g}/{request.confluence_overbought:g})"
+        )
     else:
         raise HTTPException(
             status_code=400,
@@ -109,6 +123,9 @@ def run_backtest(request: BacktestRequest) -> BacktestResponse:
             stop_loss_pct=request.stop_loss_pct,
             take_profit_pct=request.take_profit_pct,
             trailing_stop_pct=request.trailing_stop_pct,
+            atr_period=request.atr_period,
+            atr_stop_multiplier=request.atr_stop_multiplier,
+            risk_per_trade_pct=request.risk_per_trade_pct,
         )
         result = backtest.run(bars)
     except Exception as error:

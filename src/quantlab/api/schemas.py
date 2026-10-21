@@ -70,12 +70,14 @@ class StrategyType(str, Enum):
     RSI = "rsi"
     BOLLINGER = "bollinger"
     MACD = "macd"
+    CONFLUENCE = "confluence"
 
 
 class PositionSizingMode(str, Enum):
     UNIT = "unit"
     ALL_IN = "all_in"
     FIXED_QUANTITY = "fixed_quantity"
+    ATR_FRACTIONAL = "atr_fractional"
 
 
 class TradeDTO(BaseModel):
@@ -167,6 +169,28 @@ class BacktestRequest(BaseModel):
         ge=1,
         description="Signal line EMA period for MACD.",
     )
+    confluence_trend_period: int = Field(
+        default=50,
+        ge=2,
+        description="Trend EMA filter period for Confluence strategy.",
+    )
+    confluence_pullback_period: int = Field(
+        default=14,
+        ge=2,
+        description="Momentum RSI pullback period for Confluence strategy.",
+    )
+    confluence_oversold: float = Field(
+        default=35.0,
+        ge=0.0,
+        le=99.0,
+        description="Oversold entry threshold for Confluence strategy.",
+    )
+    confluence_overbought: float = Field(
+        default=65.0,
+        ge=1.0,
+        le=100.0,
+        description="Overbought exit threshold for Confluence strategy.",
+    )
     initial_cash: float = Field(
         default=100_000.0,
         gt=0.0,
@@ -208,6 +232,22 @@ class BacktestRequest(BaseModel):
         gt=0.0,
         le=1.0,
         description="Trailing stop-loss threshold as decimal.",
+    )
+    atr_period: int = Field(
+        default=14,
+        ge=1,
+        description="Average True Range calculation period.",
+    )
+    atr_stop_multiplier: float | None = Field(
+        default=None,
+        gt=0.0,
+        description="ATR trailing stop multiplier (k * ATR).",
+    )
+    risk_per_trade_pct: float | None = Field(
+        default=None,
+        gt=0.0,
+        le=1.0,
+        description="Fraction of capital at risk per trade for atr_fractional sizing.",
     )
 
     @model_validator(mode="after")
@@ -253,6 +293,27 @@ class BacktestRequest(BaseModel):
         ):
             raise ValueError(
                 f"macd_signal ({self.macd_signal}) must be at least 1."
+            )
+        if (
+            self.strategy == StrategyType.CONFLUENCE
+            and self.confluence_trend_period < 2
+        ):
+            raise ValueError(
+                f"confluence_trend_period ({self.confluence_trend_period}) must be at least 2."
+            )
+        if (
+            self.strategy == StrategyType.CONFLUENCE
+            and self.confluence_pullback_period < 2
+        ):
+            raise ValueError(
+                f"confluence_pullback_period ({self.confluence_pullback_period}) must be at least 2."
+            )
+        if (
+            self.strategy == StrategyType.CONFLUENCE
+            and self.confluence_oversold >= self.confluence_overbought
+        ):
+            raise ValueError(
+                f"confluence_oversold ({self.confluence_oversold}) must be strictly less than confluence_overbought ({self.confluence_overbought})."
             )
         return self
 
@@ -600,6 +661,8 @@ class TearSheetResponse(BaseModel):
 class AllocationWeightingEnum(str, Enum):
     EQUAL_WEIGHT = "equal_weight"
     INVERSE_VOLATILITY = "inverse_volatility"
+    MAX_SHARPE = "max_sharpe"
+    MIN_VARIANCE = "min_variance"
     CUSTOM = "custom"
 
 
@@ -687,6 +750,36 @@ class BasketBacktestResponse(BaseModel):
     equity_points: list[BasketEquityPointDTO]
 
 
+class PortfolioPointDTO(BaseModel):
+    expected_return: float
+    volatility: float
+    sharpe_ratio: float
+    weights: dict[str, float] = Field(default_factory=dict)
+
+
+class EfficientFrontierRequest(BaseModel):
+    datasets: list[str] = Field(
+        default_factory=lambda: ["reliance_daily.csv", "tcs_daily.csv", "infy_daily.csv"],
+        min_length=2,
+        description="List of at least 2 datasets to optimize.",
+    )
+    risk_free_rate: float = Field(default=0.05, ge=0.0, le=0.20)
+    num_points: int = Field(default=25, ge=5, le=100)
+    num_simulations: int = Field(default=500, ge=50, le=5000)
+
+
+class EfficientFrontierResponse(BaseModel):
+    symbols: list[str]
+    frontier_curve: list[PortfolioPointDTO]
+    simulated_portfolios: list[PortfolioPointDTO]
+    max_sharpe: PortfolioPointDTO
+    min_variance: PortfolioPointDTO
+    equal_weight: PortfolioPointDTO
+    inverse_volatility: PortfolioPointDTO
+    annualized_returns: dict[str, float]
+    annualized_volatilities: dict[str, float]
+
+
 class UserDTO(BaseModel):
     id: int
     username: str
@@ -768,4 +861,39 @@ class MonteCarloResponse(BaseModel):
     confidence_cone: list[MonteCarloPointDTO]
     drawdown_histogram: list[DrawdownHistogramBinDTO]
 
+class BenchmarkRowDTO(BaseModel):
+    dataset: str
+    symbol: str
+    strategy_name: str
+    configuration: str
+    total_trades: int
+    final_equity: float
+    total_pnl: float
+    total_return: float
+    cagr: float | None = None
+    sharpe_ratio: float | None = None
+    sortino_ratio: float | None = None
+    max_drawdown: float
+    calmar_ratio: float | None = None
+    win_rate: float | None = None
+    profit_factor: float | None = None
+
+
+class BenchmarkMatrixRequest(BaseModel):
+    datasets: list[str] | None = Field(
+        default=None,
+        description="Optional list of dataset filenames in data/. If omitted, all datasets are evaluated.",
+    )
+    initial_cash: float = Field(default=100_000.0, gt=0)
+    commission_rate: float = Field(default=0.001, ge=0.0)
+    slippage_rate: float = Field(default=0.001, ge=0.0)
+
+
+class BenchmarkMatrixResponse(BaseModel):
+    rows: list[BenchmarkRowDTO]
+    datasets: list[str]
+    strategies: list[str]
+    markdown_table: str
+    latex_table: str
+    csv_table: str
 

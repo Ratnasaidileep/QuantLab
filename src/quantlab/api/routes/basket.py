@@ -7,7 +7,10 @@ from quantlab.api.schemas import (
     BasketBacktestResponse,
     BasketEquityPointDTO,
     BasketTradeDTO,
+    EfficientFrontierRequest,
+    EfficientFrontierResponse,
     MetricsDTO,
+    PortfolioPointDTO,
     TailRiskDTO,
 )
 from quantlab.config import settings
@@ -17,6 +20,7 @@ from quantlab.portfolio.basket import (
     BasketBacktestEngine,
     RebalanceFrequency,
 )
+from quantlab.portfolio.optimizer import generate_efficient_frontier
 
 router = APIRouter(prefix="/basket", tags=["Basket Portfolio"])
 
@@ -198,4 +202,73 @@ def run_basket_backtest(request: BasketBacktestRequest) -> BasketBacktestRespons
         tail_risk=tail_risk_dto,
         trades=trades_dto,
         equity_points=equity_points_dto,
+    )
+
+
+@router.post("/efficient-frontier", response_model=EfficientFrontierResponse)
+def compute_efficient_frontier(request: EfficientFrontierRequest) -> EfficientFrontierResponse:
+    """Compute the Markowitz Efficient Frontier curve, Max Sharpe portfolio, and Monte Carlo cloud."""
+    if len(request.datasets) < 2:
+        raise HTTPException(
+            status_code=400,
+            detail="At least two datasets are required to compute the Markowitz Efficient Frontier.",
+        )
+
+    bars_by_symbol = {}
+    symbols = []
+
+    for dataset_name in request.datasets:
+        clean_name = Path(dataset_name).name
+        file_path = DATA_DIR / clean_name
+
+        if not file_path.exists() or not file_path.is_file():
+            raise HTTPException(
+                status_code=404,
+                detail=f"Dataset '{clean_name}' not found.",
+            )
+
+        try:
+            bars = load_bars_from_csv(file_path)
+        except Exception as error:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Failed to load dataset '{clean_name}': {error}",
+            ) from error
+
+        sym = _symbol_from_filename(clean_name)
+        bars_by_symbol[sym] = bars
+        symbols.append(sym)
+
+    try:
+        result = generate_efficient_frontier(
+            symbols=symbols,
+            data=bars_by_symbol,
+            num_points=request.num_points,
+            num_simulations=request.num_simulations,
+            risk_free_rate=request.risk_free_rate,
+        )
+    except Exception as error:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Efficient frontier calculation failed: {error}",
+        ) from error
+
+    def _to_dto(pt) -> PortfolioPointDTO:
+        return PortfolioPointDTO(
+            expected_return=round(pt.expected_return, 4),
+            volatility=round(pt.volatility, 4),
+            sharpe_ratio=round(pt.sharpe_ratio, 4),
+            weights={k: round(v, 4) for k, v in pt.weights.items()},
+        )
+
+    return EfficientFrontierResponse(
+        symbols=result.symbols,
+        frontier_curve=[_to_dto(p) for p in result.frontier_curve],
+        simulated_portfolios=[_to_dto(p) for p in result.simulated_portfolios],
+        max_sharpe=_to_dto(result.max_sharpe),
+        min_variance=_to_dto(result.min_variance),
+        equal_weight=_to_dto(result.equal_weight),
+        inverse_volatility=_to_dto(result.inverse_volatility),
+        annualized_returns={k: round(v, 4) for k, v in result.annualized_returns.items()},
+        annualized_volatilities={k: round(v, 4) for k, v in result.annualized_volatilities.items()},
     )

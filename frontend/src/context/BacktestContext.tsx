@@ -102,6 +102,7 @@ export function BacktestProvider({ children }: { children: React.ReactNode }) {
     if (sName.includes('rsi')) stratType = 'rsi';
     else if (sName.includes('bollinger')) stratType = 'bollinger';
     else if (sName.includes('macd')) stratType = 'macd';
+    else if (sName.includes('confluence')) stratType = 'confluence';
 
     const p = exp.parameters || {};
     setConfig((prev) => ({
@@ -118,11 +119,18 @@ export function BacktestProvider({ children }: { children: React.ReactNode }) {
       macd_fast: typeof p.macd_fast === 'number' ? p.macd_fast : (typeof p.fast_period === 'number' && stratType === 'macd' ? p.fast_period : prev.macd_fast),
       macd_slow: typeof p.macd_slow === 'number' ? p.macd_slow : (typeof p.slow_period === 'number' && stratType === 'macd' ? p.slow_period : prev.macd_slow),
       macd_signal: typeof p.macd_signal === 'number' ? p.macd_signal : (typeof p.signal_period === 'number' ? p.signal_period : prev.macd_signal),
+      confluence_trend_period: typeof p.confluence_trend_period === 'number' ? p.confluence_trend_period : (typeof p.trend_period === 'number' ? p.trend_period : prev.confluence_trend_period),
+      confluence_pullback_period: typeof p.confluence_pullback_period === 'number' ? p.confluence_pullback_period : (typeof p.pullback_period === 'number' ? p.pullback_period : prev.confluence_pullback_period),
+      confluence_oversold: typeof p.confluence_oversold === 'number' ? p.confluence_oversold : (typeof p.oversold === 'number' && stratType === 'confluence' ? p.oversold : prev.confluence_oversold),
+      confluence_overbought: typeof p.confluence_overbought === 'number' ? p.confluence_overbought : (typeof p.overbought === 'number' && stratType === 'confluence' ? p.overbought : prev.confluence_overbought),
       initial_cash: exp.initial_cash ?? prev.initial_cash,
       commission_rate: exp.commission_rate ?? prev.commission_rate,
       slippage_rate: exp.slippage_rate ?? prev.slippage_rate,
-      sizing_mode: (exp.sizing_mode as 'unit' | 'fixed_quantity' | 'all_in') ?? prev.sizing_mode,
+      sizing_mode: (exp.sizing_mode as 'unit' | 'fixed_quantity' | 'all_in' | 'atr_fractional') ?? prev.sizing_mode,
       quantity_per_trade: exp.quantity_per_trade ?? prev.quantity_per_trade,
+      atr_period: typeof p.atr_period === 'number' ? p.atr_period : prev.atr_period,
+      atr_stop_multiplier: typeof p.atr_stop_multiplier === 'number' ? p.atr_stop_multiplier : prev.atr_stop_multiplier,
+      risk_per_trade_pct: typeof p.risk_per_trade_pct === 'number' ? p.risk_per_trade_pct : prev.risk_per_trade_pct,
     }));
 
     setBacktestResult({

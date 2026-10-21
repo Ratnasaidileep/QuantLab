@@ -10,6 +10,7 @@ from quantlab.backtest.models import Trade
 from quantlab.data.models import Bar
 from quantlab.strategy.base import Strategy
 from quantlab.strategy.bollinger import BollingerBandsStrategy
+from quantlab.strategy.confluence import ConfluenceStrategy
 from quantlab.strategy.macd import MACDStrategy
 from quantlab.strategy.moving_average import MovingAverageCrossover
 from quantlab.strategy.rsi import RSIStrategy
@@ -147,6 +148,18 @@ def _instantiate_strategy(
             signal_period=signal,
         )
         return strat, True
+    if strategy_name.lower() in ("confluence", "trend_pullback", "trend confluence"):
+        trend = int(params.get("trend_period", params.get("confluence_trend_period", 50)))
+        pullback = int(params.get("pullback_period", params.get("confluence_pullback_period", 14)))
+        oversold = float(params.get("oversold", params.get("confluence_oversold", 35.0)))
+        overbought = float(params.get("overbought", params.get("confluence_overbought", 65.0)))
+        strat = ConfluenceStrategy(
+            trend_period=trend,
+            pullback_period=pullback,
+            oversold=oversold,
+            overbought=overbought,
+        )
+        return strat, False
     raise ValueError(f"Unsupported strategy '{strategy_name}'.")
 
 
@@ -200,6 +213,13 @@ def run_walk_forward_optimization(
                 {"period": 20, "std_dev_multiplier": 2.0},
                 {"period": 20, "std_dev_multiplier": 2.5},
                 {"period": 30, "std_dev_multiplier": 2.0},
+            ]
+        elif strategy_name.lower() in ("confluence", "trend_pullback", "trend confluence"):
+            candidate_parameters = [
+                {"trend_period": 30, "pullback_period": 10, "oversold": 35.0, "overbought": 65.0},
+                {"trend_period": 50, "pullback_period": 14, "oversold": 35.0, "overbought": 65.0},
+                {"trend_period": 50, "pullback_period": 14, "oversold": 30.0, "overbought": 70.0},
+                {"trend_period": 100, "pullback_period": 14, "oversold": 35.0, "overbought": 65.0},
             ]
         else:
             candidate_parameters = [

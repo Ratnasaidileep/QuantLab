@@ -1,10 +1,12 @@
 import { type MouseEvent, useMemo, useState } from 'react';
-import { executeBasketBacktest, fetchBatchDatasetsFromAPI } from '../api/client';
+import { executeBasketBacktest, fetchBatchDatasetsFromAPI, fetchEfficientFrontier } from '../api/client';
 import type {
   AllocationWeighting,
   BasketBacktestRequest,
   BasketBacktestResponse,
   DatasetInfo,
+  EfficientFrontierResponse,
+  PortfolioPointDTO,
   RebalanceFrequency,
 } from '../types';
 
@@ -30,6 +32,12 @@ const ASSET_COLORS = [
   '#8b5cf6', // purple
   '#06b6d4', // cyan
 ];
+
+const F_WIDTH = 750;
+const F_HEIGHT = 340;
+const F_PADDING = { top: 30, right: 35, bottom: 45, left: 75 };
+const F_PLOT_W = F_WIDTH - F_PADDING.left - F_PADDING.right;
+const F_PLOT_H = F_HEIGHT - F_PADDING.top - F_PADDING.bottom;
 
 export function BasketPanel({
   datasets,
@@ -63,6 +71,53 @@ export function BasketPanel({
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<BasketBacktestResponse | null>(null);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+
+  // Modern Portfolio Theory & Efficient Frontier State
+  const [frontierData, setFrontierData] = useState<EfficientFrontierResponse | null>(null);
+  const [isFrontierLoading, setIsFrontierLoading] = useState<boolean>(false);
+  const [frontierError, setFrontierError] = useState<string | null>(null);
+  const [selectedFrontierPoint, setSelectedFrontierPoint] = useState<PortfolioPointDTO | null>(null);
+  const [hoveredFrontierPoint, setHoveredFrontierPoint] = useState<PortfolioPointDTO | null>(null);
+  const [frontierPointsCount, setFrontierPointsCount] = useState<number>(25);
+  const [frontierSimCount, setFrontierSimCount] = useState<number>(500);
+  const [applyNotification, setApplyNotification] = useState<string | null>(null);
+
+  const handleComputeFrontier = async () => {
+    if (selectedDatasets.length < 2) {
+      setFrontierError('Please select at least 2 assets to construct the Markowitz Efficient Frontier.');
+      return;
+    }
+    setIsFrontierLoading(true);
+    setFrontierError(null);
+    try {
+      const res = await fetchEfficientFrontier({
+        datasets: selectedDatasets,
+        num_points: frontierPointsCount,
+        num_simulations: frontierSimCount,
+        risk_free_rate: riskFreeRate,
+      });
+      setFrontierData(res);
+      setSelectedFrontierPoint(res.max_sharpe);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to compute Efficient Frontier.';
+      setFrontierError(msg);
+    } finally {
+      setIsFrontierLoading(false);
+    }
+  };
+
+  const handleApplyPortfolioWeights = (p: PortfolioPointDTO, name: string) => {
+    const formatted: Record<string, number> = {};
+    selectedDatasets.forEach((d) => {
+      const sym = cleanSymbol(d);
+      const raw = p.weights[sym] ?? 0;
+      formatted[sym] = Math.round(raw * 100);
+    });
+    setWeighting('custom');
+    setCustomWeights(formatted);
+    setApplyNotification(`✓ Applied ${name} allocation (${Object.entries(formatted).map(([s, w]) => `${s}: ${w}%`).join(', ')}) to Custom Target Weights.`);
+    setTimeout(() => setApplyNotification(null), 5000);
+  };
 
   const [showBatchInput, setShowBatchInput] = useState<boolean>(false);
   const [batchSymbolsInput, setBatchSymbolsInput] = useState<string>('');
@@ -260,6 +315,59 @@ export function BasketPanel({
 
   const activePoint = hoverIndex !== null && points[hoverIndex] ? points[hoverIndex] : null;
 
+  // Efficient Frontier Chart Geometry
+
+  const frontierChartData = useMemo(() => {
+    if (!frontierData) return null;
+    const allPoints: PortfolioPointDTO[] = [
+      ...frontierData.simulated_portfolios,
+      ...frontierData.frontier_curve,
+      frontierData.max_sharpe,
+      frontierData.min_variance,
+      frontierData.equal_weight,
+      frontierData.inverse_volatility,
+    ];
+
+    const vols = allPoints.map((p) => p.volatility);
+    const rets = allPoints.map((p) => p.expected_return);
+
+    let minV = Math.min(...vols);
+    let maxV = Math.max(...vols);
+    let minR = Math.min(...rets);
+    let maxR = Math.max(...rets);
+
+    const spanV = maxV - minV || 0.05;
+    const spanR = maxR - minR || 0.05;
+
+    minV = Math.max(0, minV - spanV * 0.08);
+    maxV = maxV + spanV * 0.08;
+    minR = minR - spanR * 0.08;
+    maxR = maxR + spanR * 0.08;
+
+    const scaleX = (vol: number) =>
+      F_PADDING.left + ((vol - minV) / (maxV - minV)) * F_PLOT_W;
+    const scaleY = (ret: number) =>
+      F_PADDING.top + F_PLOT_H - ((ret - minR) / (maxR - minR)) * F_PLOT_H;
+
+    // Frontier curve polyline path
+    const sortedCurve = [...frontierData.frontier_curve].sort((a, b) => a.volatility - b.volatility);
+    const curvePath = sortedCurve.reduce(
+      (acc, p, i) => `${acc} ${i === 0 ? 'M' : 'L'} ${scaleX(p.volatility).toFixed(1)} ${scaleY(p.expected_return).toFixed(1)}`,
+      '',
+    );
+
+    return {
+      minV,
+      maxV,
+      minR,
+      maxR,
+      scaleX,
+      scaleY,
+      curvePath,
+      sortedCurve,
+    };
+  }, [frontierData]);
+
   return (
     <div className="tear-sheet-container">
       {/* Title & Introduction */}
@@ -399,6 +507,8 @@ export function BasketPanel({
             >
               <option value="equal_weight">Equal Weight (1/N)</option>
               <option value="inverse_volatility">Inverse Volatility (Risk Parity)</option>
+              <option value="max_sharpe">Max Sharpe Ratio (Tangency Portfolio)</option>
+              <option value="min_variance">Minimum Variance (Min Volatility)</option>
               <option value="custom">Custom Target Weights</option>
             </select>
           </div>
@@ -525,6 +635,528 @@ export function BasketPanel({
         {error && (
           <div className="alert alert-error" style={{ marginTop: '1rem' }}>
             {error}
+          </div>
+        )}
+      </div>
+
+      {/* Modern Portfolio Theory: Markowitz Efficient Frontier */}
+      <div className="card" style={{ marginBottom: '1.5rem', padding: '1.25rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
+          <div>
+            <h3 style={{ fontSize: '1.05rem', margin: 0, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span>📈</span> Markowitz Efficient Frontier & MPT Optimizer
+            </h3>
+            <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+              Computes mean-variance optimal allocations via constrained convex quadratic optimization (exact simplex projection).
+            </p>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <label style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Curve Points:</label>
+              <input
+                type="number"
+                min={10}
+                max={50}
+                value={frontierPointsCount}
+                onChange={(e) => setFrontierPointsCount(Number(e.target.value))}
+                className="form-control form-control-sm"
+                style={{ width: '60px', padding: '0.2rem 0.4rem', fontSize: '0.8rem' }}
+              />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <label style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Simulations:</label>
+              <input
+                type="number"
+                min={100}
+                max={2000}
+                step={100}
+                value={frontierSimCount}
+                onChange={(e) => setFrontierSimCount(Number(e.target.value))}
+                className="form-control form-control-sm"
+                style={{ width: '70px', padding: '0.2rem 0.4rem', fontSize: '0.8rem' }}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={handleComputeFrontier}
+              disabled={isFrontierLoading || selectedDatasets.length < 2}
+              className="btn btn-secondary btn-sm"
+              style={{ padding: '0.35rem 0.8rem', whiteSpace: 'nowrap' }}
+            >
+              {isFrontierLoading ? (
+                <span>Optimizing...</span>
+              ) : (
+                <span>⚡ Compute Efficient Frontier</span>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {frontierError && (
+          <div className="alert alert-error" style={{ marginBottom: '1rem', fontSize: '0.85rem' }}>
+            {frontierError}
+          </div>
+        )}
+
+        {applyNotification && (
+          <div className="alert alert-success" style={{ marginBottom: '1rem', fontSize: '0.85rem' }}>
+            {applyNotification}
+          </div>
+        )}
+
+        {frontierData && frontierChartData && (
+          <div>
+            {/* 4 MPT Benchmark Cards */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '0.75rem', marginBottom: '1.25rem' }}>
+              <div
+                style={{
+                  background: 'rgba(245, 158, 11, 0.08)',
+                  border: '1px solid rgba(245, 158, 11, 0.3)',
+                  borderRadius: '6px',
+                  padding: '0.75rem',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#f59e0b' }}>🌟 Max Sharpe (Tangency)</span>
+                  <button
+                    type="button"
+                    onClick={() => handleApplyPortfolioWeights(frontierData.max_sharpe, 'Max Sharpe')}
+                    className="btn btn-sm"
+                    style={{ fontSize: '0.7rem', padding: '1px 6px', background: '#f59e0b', color: '#000', border: 'none' }}
+                  >
+                    Apply
+                  </button>
+                </div>
+                <div style={{ fontSize: '1.15rem', fontWeight: 700, margin: '4px 0', color: 'var(--text-primary)' }}>
+                  Sharpe: {frontierData.max_sharpe.sharpe_ratio.toFixed(2)}
+                </div>
+                <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>
+                  Ret: {(frontierData.max_sharpe.expected_return * 100).toFixed(1)}% | Vol: {(frontierData.max_sharpe.volatility * 100).toFixed(1)}%
+                </div>
+              </div>
+
+              <div
+                style={{
+                  background: 'rgba(16, 185, 129, 0.08)',
+                  border: '1px solid rgba(16, 185, 129, 0.3)',
+                  borderRadius: '6px',
+                  padding: '0.75rem',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#10b981' }}>🛡️ Minimum Variance</span>
+                  <button
+                    type="button"
+                    onClick={() => handleApplyPortfolioWeights(frontierData.min_variance, 'Min Variance')}
+                    className="btn btn-sm"
+                    style={{ fontSize: '0.7rem', padding: '1px 6px', background: '#10b981', color: '#fff', border: 'none' }}
+                  >
+                    Apply
+                  </button>
+                </div>
+                <div style={{ fontSize: '1.15rem', fontWeight: 700, margin: '4px 0', color: 'var(--text-primary)' }}>
+                  Sharpe: {frontierData.min_variance.sharpe_ratio.toFixed(2)}
+                </div>
+                <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>
+                  Ret: {(frontierData.min_variance.expected_return * 100).toFixed(1)}% | Vol: {(frontierData.min_variance.volatility * 100).toFixed(1)}%
+                </div>
+              </div>
+
+              <div
+                style={{
+                  background: 'rgba(59, 130, 246, 0.08)',
+                  border: '1px solid rgba(59, 130, 246, 0.3)',
+                  borderRadius: '6px',
+                  padding: '0.75rem',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#3b82f6' }}>⚖️ Equal Weight (1/N)</span>
+                  <button
+                    type="button"
+                    onClick={() => handleApplyPortfolioWeights(frontierData.equal_weight, 'Equal Weight')}
+                    className="btn btn-sm"
+                    style={{ fontSize: '0.7rem', padding: '1px 6px', background: '#3b82f6', color: '#fff', border: 'none' }}
+                  >
+                    Apply
+                  </button>
+                </div>
+                <div style={{ fontSize: '1.15rem', fontWeight: 700, margin: '4px 0', color: 'var(--text-primary)' }}>
+                  Sharpe: {frontierData.equal_weight.sharpe_ratio.toFixed(2)}
+                </div>
+                <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>
+                  Ret: {(frontierData.equal_weight.expected_return * 100).toFixed(1)}% | Vol: {(frontierData.equal_weight.volatility * 100).toFixed(1)}%
+                </div>
+              </div>
+
+              <div
+                style={{
+                  background: 'rgba(168, 85, 247, 0.08)',
+                  border: '1px solid rgba(168, 85, 247, 0.3)',
+                  borderRadius: '6px',
+                  padding: '0.75rem',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#a855f7' }}>📊 Inverse Volatility</span>
+                  <button
+                    type="button"
+                    onClick={() => handleApplyPortfolioWeights(frontierData.inverse_volatility, 'Inverse Volatility')}
+                    className="btn btn-sm"
+                    style={{ fontSize: '0.7rem', padding: '1px 6px', background: '#a855f7', color: '#fff', border: 'none' }}
+                  >
+                    Apply
+                  </button>
+                </div>
+                <div style={{ fontSize: '1.15rem', fontWeight: 700, margin: '4px 0', color: 'var(--text-primary)' }}>
+                  Sharpe: {frontierData.inverse_volatility.sharpe_ratio.toFixed(2)}
+                </div>
+                <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>
+                  Ret: {(frontierData.inverse_volatility.expected_return * 100).toFixed(1)}% | Vol: {(frontierData.inverse_volatility.volatility * 100).toFixed(1)}%
+                </div>
+              </div>
+            </div>
+
+            {/* Interactive SVG Scatter Plot */}
+            <div style={{ overflowX: 'auto', marginBottom: '1rem' }}>
+              <svg
+                width={F_WIDTH}
+                height={F_HEIGHT}
+                style={{ background: 'var(--bg-secondary)', borderRadius: '6px', border: '1px solid var(--border-color)', userSelect: 'none' }}
+              >
+                <defs>
+                  <linearGradient id="frontierCurveGrad" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stopColor="#06b6d4" />
+                    <stop offset="100%" stopColor="#3b82f6" />
+                  </linearGradient>
+                </defs>
+
+                {/* Gridlines */}
+                {[0.2, 0.4, 0.6, 0.8].map((ratio) => {
+                  const y = F_PADDING.top + F_PLOT_H * ratio;
+                  const retVal = frontierChartData.maxR - ratio * (frontierChartData.maxR - frontierChartData.minR);
+                  return (
+                    <g key={`ygrid-${ratio}`}>
+                      <line
+                        x1={F_PADDING.left}
+                        y1={y}
+                        x2={F_WIDTH - F_PADDING.right}
+                        y2={y}
+                        stroke="var(--border-color, #334155)"
+                        strokeDasharray="3 3"
+                        strokeWidth="0.8"
+                      />
+                      <text
+                        x={F_PADDING.left - 8}
+                        y={y + 3}
+                        textAnchor="end"
+                        fontSize="10"
+                        fill="var(--text-secondary, #94a3b8)"
+                      >
+                        {(retVal * 100).toFixed(1)}%
+                      </text>
+                    </g>
+                  );
+                })}
+
+                {[0.25, 0.5, 0.75].map((ratio) => {
+                  const x = F_PADDING.left + F_PLOT_W * ratio;
+                  const volVal = frontierChartData.minV + ratio * (frontierChartData.maxV - frontierChartData.minV);
+                  return (
+                    <g key={`xgrid-${ratio}`}>
+                      <line
+                        x1={x}
+                        y1={F_PADDING.top}
+                        x2={x}
+                        y2={F_PADDING.top + F_PLOT_H}
+                        stroke="var(--border-color, #334155)"
+                        strokeDasharray="3 3"
+                        strokeWidth="0.8"
+                      />
+                      <text
+                        x={x}
+                        y={F_PADDING.top + F_PLOT_H + 16}
+                        textAnchor="middle"
+                        fontSize="10"
+                        fill="var(--text-secondary, #94a3b8)"
+                      >
+                        {(volVal * 100).toFixed(1)}%
+                      </text>
+                    </g>
+                  );
+                })}
+
+                {/* Axes Labels */}
+                <text
+                  x={F_PADDING.left + F_PLOT_W / 2}
+                  y={F_HEIGHT - 8}
+                  textAnchor="middle"
+                  fontSize="11"
+                  fontWeight="600"
+                  fill="var(--text-secondary, #94a3b8)"
+                >
+                  Annualized Volatility (Risk, σ)
+                </text>
+                <text
+                  x={-F_PADDING.top - F_PLOT_H / 2}
+                  y={18}
+                  transform="rotate(-90)"
+                  textAnchor="middle"
+                  fontSize="11"
+                  fontWeight="600"
+                  fill="var(--text-secondary, #94a3b8)"
+                >
+                  Expected Annual Return (μ)
+                </text>
+
+                {/* 1. Monte Carlo Random Cloud */}
+                {frontierData.simulated_portfolios.map((p, idx) => {
+                  const cx = frontierChartData.scaleX(p.volatility);
+                  const cy = frontierChartData.scaleY(p.expected_return);
+                  return (
+                    <circle
+                      key={`sim-${idx}`}
+                      cx={cx}
+                      cy={cy}
+                      r="2.5"
+                      fill="#64748b"
+                      opacity="0.3"
+                      style={{ cursor: 'pointer' }}
+                      onMouseEnter={() => setHoveredFrontierPoint(p)}
+                      onMouseLeave={() => setHoveredFrontierPoint(null)}
+                      onClick={() => setSelectedFrontierPoint(p)}
+                    />
+                  );
+                })}
+
+                {/* 2. Markowitz Efficient Frontier Line */}
+                <path
+                  d={frontierChartData.curvePath}
+                  fill="none"
+                  stroke="url(#frontierCurveGrad)"
+                  strokeWidth="2.8"
+                />
+
+                {/* 3. Frontier optimal points */}
+                {frontierChartData.sortedCurve.map((p, idx) => {
+                  const cx = frontierChartData.scaleX(p.volatility);
+                  const cy = frontierChartData.scaleY(p.expected_return);
+                  return (
+                    <circle
+                      key={`f-pt-${idx}`}
+                      cx={cx}
+                      cy={cy}
+                      r="3.5"
+                      fill="#06b6d4"
+                      stroke="#ffffff"
+                      strokeWidth="1"
+                      style={{ cursor: 'pointer' }}
+                      onMouseEnter={() => setHoveredFrontierPoint(p)}
+                      onMouseLeave={() => setHoveredFrontierPoint(null)}
+                      onClick={() => setSelectedFrontierPoint(p)}
+                    />
+                  );
+                })}
+
+                {/* 4. Special Key Portfolios */}
+                {/* Equal Weight */}
+                {(() => {
+                  const p = frontierData.equal_weight;
+                  const cx = frontierChartData.scaleX(p.volatility);
+                  const cy = frontierChartData.scaleY(p.expected_return);
+                  return (
+                    <circle
+                      cx={cx}
+                      cy={cy}
+                      r="6"
+                      fill="#3b82f6"
+                      stroke="#ffffff"
+                      strokeWidth="2"
+                      style={{ cursor: 'pointer' }}
+                      onMouseEnter={() => setHoveredFrontierPoint(p)}
+                      onMouseLeave={() => setHoveredFrontierPoint(null)}
+                      onClick={() => setSelectedFrontierPoint(p)}
+                    />
+                  );
+                })()}
+
+                {/* Inverse Volatility */}
+                {(() => {
+                  const p = frontierData.inverse_volatility;
+                  const cx = frontierChartData.scaleX(p.volatility);
+                  const cy = frontierChartData.scaleY(p.expected_return);
+                  return (
+                    <circle
+                      cx={cx}
+                      cy={cy}
+                      r="6"
+                      fill="#a855f7"
+                      stroke="#ffffff"
+                      strokeWidth="2"
+                      style={{ cursor: 'pointer' }}
+                      onMouseEnter={() => setHoveredFrontierPoint(p)}
+                      onMouseLeave={() => setHoveredFrontierPoint(null)}
+                      onClick={() => setSelectedFrontierPoint(p)}
+                    />
+                  );
+                })()}
+
+                {/* Min Variance */}
+                {(() => {
+                  const p = frontierData.min_variance;
+                  const cx = frontierChartData.scaleX(p.volatility);
+                  const cy = frontierChartData.scaleY(p.expected_return);
+                  return (
+                    <circle
+                      cx={cx}
+                      cy={cy}
+                      r="7.5"
+                      fill="#10b981"
+                      stroke="#ffffff"
+                      strokeWidth="2.5"
+                      style={{ cursor: 'pointer' }}
+                      onMouseEnter={() => setHoveredFrontierPoint(p)}
+                      onMouseLeave={() => setHoveredFrontierPoint(null)}
+                      onClick={() => setSelectedFrontierPoint(p)}
+                    />
+                  );
+                })()}
+
+                {/* Max Sharpe (Tangency) */}
+                {(() => {
+                  const p = frontierData.max_sharpe;
+                  const cx = frontierChartData.scaleX(p.volatility);
+                  const cy = frontierChartData.scaleY(p.expected_return);
+                  return (
+                    <circle
+                      cx={cx}
+                      cy={cy}
+                      r="8"
+                      fill="#f59e0b"
+                      stroke="#ffffff"
+                      strokeWidth="2.5"
+                      style={{ cursor: 'pointer' }}
+                      onMouseEnter={() => setHoveredFrontierPoint(p)}
+                      onMouseLeave={() => setHoveredFrontierPoint(null)}
+                      onClick={() => setSelectedFrontierPoint(p)}
+                    />
+                  );
+                })()}
+
+                {/* Active/Hovered Ring */}
+                {(hoveredFrontierPoint || selectedFrontierPoint) && (() => {
+                  const active = hoveredFrontierPoint || selectedFrontierPoint!;
+                  const cx = frontierChartData.scaleX(active.volatility);
+                  const cy = frontierChartData.scaleY(active.expected_return);
+                  return (
+                    <circle
+                      cx={cx}
+                      cy={cy}
+                      r="12"
+                      fill="none"
+                      stroke="#06b6d4"
+                      strokeWidth="1.5"
+                      strokeDasharray="3 3"
+                    />
+                  );
+                })()}
+              </svg>
+            </div>
+
+            {/* Selected / Hovered Portfolio Inspector Drawer */}
+            {(() => {
+              const active = hoveredFrontierPoint || selectedFrontierPoint;
+              if (!active) return null;
+              const isMaxSharpe = active === frontierData.max_sharpe;
+              const isMinVar = active === frontierData.min_variance;
+              const isEq = active === frontierData.equal_weight;
+              const isInvVol = active === frontierData.inverse_volatility;
+              const tag = isMaxSharpe
+                ? '🌟 Tangency (Max Sharpe)'
+                : isMinVar
+                  ? '🛡️ Minimum Variance'
+                  : isEq
+                    ? '⚖️ Equal Weight'
+                    : isInvVol
+                      ? '📊 Inverse Volatility'
+                      : 'Efficient Frontier Allocation';
+
+              return (
+                <div
+                  style={{
+                    background: 'var(--bg-secondary)',
+                    borderRadius: '6px',
+                    border: '1px solid var(--border-color)',
+                    padding: '0.85rem 1rem',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.6rem',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      <strong style={{ fontSize: '0.9rem', color: 'var(--text-primary)' }}>{tag}</strong>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                        Ret: <strong>{(active.expected_return * 100).toFixed(2)}%</strong> | Vol: <strong>{(active.volatility * 100).toFixed(2)}%</strong> | Sharpe: <strong>{active.sharpe_ratio.toFixed(2)}</strong>
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleApplyPortfolioWeights(active, tag)}
+                      className="btn btn-primary btn-sm"
+                      style={{ fontSize: '0.76rem', padding: '0.25rem 0.75rem' }}
+                    >
+                      🚀 Apply this Allocation to Basket
+                    </button>
+                  </div>
+
+                  {/* Weights Breakdown Bar & Pills */}
+                  <div style={{ display: 'flex', height: '14px', borderRadius: '4px', overflow: 'hidden' }}>
+                    {frontierData.symbols.map((sym, idx) => {
+                      const w = (active.weights[sym] || 0) * 100;
+                      if (w <= 0.01) return null;
+                      const col = ASSET_COLORS[idx % ASSET_COLORS.length];
+                      return (
+                        <div
+                          key={`bar-${sym}`}
+                          style={{
+                            width: `${w}%`,
+                            backgroundColor: col,
+                          }}
+                          title={`${sym}: ${w.toFixed(1)}%`}
+                        />
+                      );
+                    })}
+                  </div>
+
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                    {frontierData.symbols.map((sym, idx) => {
+                      const w = (active.weights[sym] || 0) * 100;
+                      const col = ASSET_COLORS[idx % ASSET_COLORS.length];
+                      return (
+                        <span
+                          key={`pill-${sym}`}
+                          style={{
+                            fontSize: '0.75rem',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            background: 'var(--bg-primary)',
+                            padding: '2px 8px',
+                            borderRadius: '12px',
+                            border: '1px solid var(--border-color)',
+                          }}
+                        >
+                          <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: col }} />
+                          <span>{sym}:</span>
+                          <strong>{w.toFixed(1)}%</strong>
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         )}
       </div>

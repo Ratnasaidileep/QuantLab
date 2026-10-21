@@ -211,6 +211,8 @@ export function TearSheetPanel({
             <option value="moving_average">Moving Average Crossover</option>
             <option value="rsi">Relative Strength Index (RSI)</option>
             <option value="bollinger">Bollinger Bands (Mean Reversion)</option>
+            <option value="macd">MACD (Convergence Divergence)</option>
+            <option value="confluence">Confluence (Trend + Momentum)</option>
           </select>
         </div>
 

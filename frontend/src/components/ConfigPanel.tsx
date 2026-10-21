@@ -130,6 +130,24 @@ export function ConfigPanel({
         macd_slow: 26,
         macd_signal: 9,
       });
+    } else if (presetName === 'confluence_swing') {
+      onChange({
+        ...config,
+        strategy: 'confluence',
+        confluence_trend_period: 50,
+        confluence_pullback_period: 14,
+        confluence_oversold: 35,
+        confluence_overbought: 65,
+      });
+    } else if (presetName === 'confluence_macro') {
+      onChange({
+        ...config,
+        strategy: 'confluence',
+        confluence_trend_period: 200,
+        confluence_pullback_period: 14,
+        confluence_oversold: 30,
+        confluence_overbought: 70,
+      });
     }
   };
 
@@ -151,8 +169,13 @@ export function ConfigPanel({
     ((config.macd_fast ?? 12) >= (config.macd_slow ?? 26) ||
       (config.macd_fast ?? 12) < 1 ||
       (config.macd_signal ?? 9) < 1);
+  const isConfluenceInvalid =
+    config.strategy === 'confluence' &&
+    ((config.confluence_oversold ?? 35) >= (config.confluence_overbought ?? 65) ||
+      (config.confluence_trend_period ?? 50) < 2 ||
+      (config.confluence_pullback_period ?? 14) < 2);
 
-  const hasFormErrors = isMaInvalid || isRsiInvalid || isBbInvalid || isMacdInvalid;
+  const hasFormErrors = isMaInvalid || isRsiInvalid || isBbInvalid || isMacdInvalid || isConfluenceInvalid;
 
   return (
     <aside className="config-panel" style={{ width: '100%', maxWidth: '360px', boxSizing: 'border-box' }}>
@@ -295,6 +318,7 @@ export function ConfigPanel({
           <option value="rsi">Relative Strength Index (RSI)</option>
           <option value="bollinger">Bollinger Bands (Mean Reversion)</option>
           <option value="macd">MACD (Convergence Divergence)</option>
+          <option value="confluence">Confluence (Trend Filter + Momentum Pullback)</option>
         </select>
       </div>
 
@@ -354,6 +378,17 @@ export function ConfigPanel({
             </div>
           </div>
         )}
+        {config.strategy === 'confluence' && (
+          <div>
+            <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <ShieldAlert size={13} style={{ color: 'var(--accent-primary)' }} />
+              Dual-Regime Trend + Momentum Confluence
+            </div>
+            <div>
+              Goes <strong>Long</strong> when Price &gt; Trend EMA ({config.confluence_trend_period ?? 50}) AND RSI ({config.confluence_pullback_period ?? 14}) pulls back &le; {config.confluence_oversold ?? 35}. Exits when RSI &ge; {config.confluence_overbought ?? 65} or Price breaks below Trend EMA.
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Presets Chips */}
@@ -391,6 +426,16 @@ export function ConfigPanel({
           <button type="button" className="btn btn-secondary btn-sm" style={{ padding: '0.2rem 0.45rem', fontSize: '0.72rem' }} onClick={() => applyPreset('macd_standard')}>
             Standard 12/26/9
           </button>
+        )}
+        {config.strategy === 'confluence' && (
+          <>
+            <button type="button" className="btn btn-secondary btn-sm" style={{ padding: '0.2rem 0.45rem', fontSize: '0.72rem' }} onClick={() => applyPreset('confluence_swing')}>
+              Swing 50/14 (35/65)
+            </button>
+            <button type="button" className="btn btn-secondary btn-sm" style={{ padding: '0.2rem 0.45rem', fontSize: '0.72rem' }} onClick={() => applyPreset('confluence_macro')}>
+              Macro 200/14 (30/70)
+            </button>
+          </>
         )}
       </div>
 
@@ -558,6 +603,65 @@ export function ConfigPanel({
         </div>
       )}
 
+      {config.strategy === 'confluence' && (
+        <div className="strategy-options">
+          <div className="form-row">
+            <div className="form-group">
+              <label htmlFor="confluence-trend">Trend Filter EMA</label>
+              <input
+                id="confluence-trend"
+                type="number"
+                min="2"
+                max="500"
+                value={config.confluence_trend_period ?? 50}
+                onChange={(e) => updateField('confluence_trend_period', Number.parseInt(e.target.value, 10) || 2)}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="confluence-pullback">RSI Pullback</label>
+              <input
+                id="confluence-pullback"
+                type="number"
+                min="2"
+                max="100"
+                value={config.confluence_pullback_period ?? 14}
+                onChange={(e) => updateField('confluence_pullback_period', Number.parseInt(e.target.value, 10) || 2)}
+              />
+            </div>
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label htmlFor="confluence-oversold">Oversold Entry (&le;)</label>
+              <input
+                id="confluence-oversold"
+                type="number"
+                min="1"
+                max="99"
+                value={config.confluence_oversold ?? 35}
+                onChange={(e) => updateField('confluence_oversold', Number.parseFloat(e.target.value) || 0)}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="confluence-overbought">Overbought Exit (&ge;)</label>
+              <input
+                id="confluence-overbought"
+                type="number"
+                min="1"
+                max="100"
+                value={config.confluence_overbought ?? 65}
+                onChange={(e) => updateField('confluence_overbought', Number.parseFloat(e.target.value) || 100)}
+              />
+            </div>
+          </div>
+          {isConfluenceInvalid && (
+            <div className="field-error" style={{ color: 'var(--loss)', fontSize: '0.75rem', marginTop: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+              <AlertTriangle size={13} />
+              Oversold must be strictly less than Overbought, and periods must be &ge; 2.
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Capital & Position Sizing */}
       <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
         <div className="form-group">
@@ -582,6 +686,7 @@ export function ConfigPanel({
             <option value="unit">Unit (1 Share — Unscaled Benchmark)</option>
             <option value="all_in">All-In (100% Available Capital)</option>
             <option value="fixed_quantity">Fixed Quantity (Custom Lot Size)</option>
+            <option value="atr_fractional">ATR Volatility Risk Sizing (Fixed Fractional %)</option>
           </select>
         </div>
 
@@ -595,6 +700,48 @@ export function ConfigPanel({
               value={config.quantity_per_trade}
               onChange={(e) => updateField('quantity_per_trade', Number.parseFloat(e.target.value) || 1)}
             />
+          </div>
+        )}
+
+        {config.sizing_mode === 'atr_fractional' && (
+          <div style={{ marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <div className="form-row">
+              <div className="form-group">
+                <label htmlFor="risk-pct" title="Percentage of total capital risked per trade">Risk per Trade (%)</label>
+                <input
+                  id="risk-pct"
+                  type="number"
+                  step="0.5"
+                  min="0.1"
+                  max="10.0"
+                  value={config.risk_per_trade_pct ? config.risk_per_trade_pct * 100 : 1.0}
+                  onChange={(e) => updateField('risk_per_trade_pct', (Number.parseFloat(e.target.value) || 1.0) / 100)}
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="atr-period" title="Lookback period for ATR volatility calculation">ATR Period</label>
+                <input
+                  id="atr-period"
+                  type="number"
+                  min="1"
+                  max="100"
+                  value={config.atr_period ?? 14}
+                  onChange={(e) => updateField('atr_period', Number.parseInt(e.target.value, 10) || 14)}
+                />
+              </div>
+            </div>
+            <div className="form-group">
+              <label htmlFor="atr-mult-sizing" title="Multiplier distance to dynamic volatility stop">ATR Stop Multiplier (k)</label>
+              <input
+                id="atr-mult-sizing"
+                type="number"
+                step="0.5"
+                min="0.5"
+                max="10.0"
+                value={config.atr_stop_multiplier ?? 2.0}
+                onChange={(e) => updateField('atr_stop_multiplier', Number.parseFloat(e.target.value) || 2.0)}
+              />
+            </div>
           </div>
         )}
       </div>
@@ -712,6 +859,22 @@ export function ConfigPanel({
                 onChange={(e) => {
                   const val = e.target.value ? Number.parseFloat(e.target.value) / 100 : null;
                   updateField('trailing_stop_pct', val);
+                }}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="atr-stop" title="Dynamic volatility-adjusted trailing stop: peak - k*ATR">ATR Dynamic Trailing Stop (k &times; ATR)</label>
+              <input
+                id="atr-stop"
+                type="number"
+                step="0.5"
+                min="0.5"
+                max="10.0"
+                placeholder="e.g. 2.0 (2x ATR)"
+                value={config.atr_stop_multiplier ?? ''}
+                onChange={(e) => {
+                  const val = e.target.value ? Number.parseFloat(e.target.value) : null;
+                  updateField('atr_stop_multiplier', val);
                 }}
               />
             </div>
