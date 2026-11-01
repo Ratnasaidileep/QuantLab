@@ -997,4 +997,8 @@ The QuantLab frontend has been fully redesigned and modernized into a terminal-g
   - Upgraded the "Price & Executions" tab in Strategy Lab to plot the true historical asset closing price curve with gradient fill and horizontal price ticks.
   - Overlaid directional execution markers: Green upward triangles ($lacktriangle$) for BUY entries and red downward triangles ($lacktriangledown$) for SELL exits at exact chronological bar timestamps and execution prices.
   - Added interactive hover crosshair showing bar date and close price, plus an interactive trade inspection drawer displaying execution price, quantity, timestamp, and audit exit reasons (e.g. `signal`, `stop_loss`, `take_profit`, `atr_trailing_stop`).
+- **List A Follow-ups & Repository Seeding:**
+  - *Experiment Serialization*: Enhanced `handleSaveExperiment` in `StrategyLabPage.tsx` to serialize `confluence_trend_period`, `confluence_pullback_period`, `confluence_oversold`, `confluence_overbought`, and risk controls (`stop_loss_pct`, `take_profit_pct`, `trailing_stop_pct`, `atr_period`, `atr_stop_multiplier`, `risk_per_trade_pct`).
+  - *Data Library Expansion*: Added 4 US tech equity daily datasets (`aapl_daily.csv`, `googl_daily.csv`, `msft_daily.csv`, `nvda_daily.csv`) to `data/` for global multi-asset portfolio and basket testing.
+  - *Baseline Seeding Suite (`scripts/seed_baseline_experiments.py`)*: Created automated seeding utility generating 4 genuine, engine-verified baseline benchmarks (Reliance MA Crossover, Reliance Bollinger Bands, TCS Confluence Regime Filter, TCS MACD Signal Crossover) into `data/quantlab.db`.
 
