@@ -18,9 +18,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies first for caching layers
+# Install Python dependencies first for caching layers (using a package stub)
 COPY pyproject.toml README.md ./
-RUN pip install --no-cache-dir --upgrade pip && \
+RUN mkdir -p src/quantlab && touch src/quantlab/__init__.py && \
+    pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir .
 
 # Copy application source code and initial market data
@@ -28,8 +29,8 @@ COPY src/ ./src/
 COPY data/ ./data/
 COPY app.py ./
 
-# Re-install package to register console scripts and metadata
-RUN pip install --no-cache-dir -e .
+# Install package with actual source code and metadata
+RUN pip install --no-cache-dir --no-deps .
 
 # Create unprivileged system user for container security
 RUN groupadd -r quantgroup && useradd -r -g quantgroup -d /app quantuser && \
