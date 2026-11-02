@@ -1,7 +1,16 @@
+import re
 from pathlib import Path
 
 import pandas as pd
 
+from quantlab.data.exceptions import (
+    CorruptedDataError,
+    DataConnectionError,
+    DataError,
+    DataProviderRateLimitError,
+    InvalidSymbolError,
+    SymbolNotFoundError,
+)
 from quantlab.data.models import Bar
 from quantlab.data.validation import validate_bar
 
@@ -14,13 +23,27 @@ REQUIRED_COLUMNS = {
     "volume",
 }
 
+VALID_PERIODS = {
+    "1d",
+    "5d",
+    "1mo",
+    "3mo",
+    "6mo",
+    "1y",
+    "2y",
+    "5y",
+    "10y",
+    "ytd",
+    "max",
+}
+
 
 def normalize_dataframe_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Normalize common OHLCV column name variations to lowercase standard."""
     col_map = {}
     for col in df.columns:
         clean = str(col).strip().lower()
-        if clean in ("date", "datetime", "time"):
+        if clean in ("date", "datetime", "time", "index"):
             col_map[col] = "timestamp"
         elif clean in ("open", "high", "low", "close", "volume"):
             col_map[col] = clean
@@ -89,27 +112,69 @@ def save_bars_to_csv(bars: list[Bar], path: str | Path) -> None:
 
 
 def fetch_ohlcv_from_yfinance(symbol: str, period: str = "2y") -> list[Bar]:
-    """Fetch historical daily OHLCV bars using yfinance."""
-    import yfinance as yf
-
+    """Fetch historical daily OHLCV bars using yfinance with structured error classification."""
     clean_symbol = symbol.strip().upper()
+    if not clean_symbol or not re.match(r"^[A-Z0-9\.\-\^_]{1,20}$", clean_symbol):
+        raise InvalidSymbolError(
+            f"Invalid symbol '{symbol}'. Ticker symbol must be 1-20 alphanumeric characters (e.g. 'AAPL', 'RELIANCE.NS', '^NSEI')."
+        )
+
+    clean_period = period.strip().lower()
+    if clean_period not in VALID_PERIODS:
+        raise DataError(
+            f"Invalid period '{period}'. Supported periods are: {', '.join(sorted(VALID_PERIODS))}."
+        )
+
+    try:
+        import yfinance as yf
+    except ImportError as err:
+        raise DataError(
+            "Online data provider 'yfinance' is not installed in the Python environment."
+        ) from err
+
     ticker = yf.Ticker(clean_symbol)
     try:
-        df = ticker.history(period=period)
-    except Exception as e:
-        raise ValueError(f"Failed to fetch data for symbol '{clean_symbol}': {e}") from e
+        df = ticker.history(period=clean_period)
+    except Exception as err:
+        err_msg = str(err)
+        lower_err = err_msg.lower()
+        if any(
+            term in lower_err
+            for term in (
+                "connection",
+                "gaierror",
+                "failed to resolve",
+                "timeout",
+                "offline",
+                "unreachable",
+                "name resolution",
+                "remotedisconnected",
+            )
+        ):
+            raise DataConnectionError(
+                f"Network error while connecting to market data provider for symbol '{clean_symbol}'. "
+                "Please check your internet connection or use a bundled local dataset."
+            ) from err
+        if any(term in lower_err for term in ("rate limit", "429", "too many requests")):
+            raise DataProviderRateLimitError(
+                f"Data provider rate limit reached for symbol '{clean_symbol}'. Please wait a moment before trying again."
+            ) from err
+        raise DataError(
+            f"External market data provider error for '{clean_symbol}': {err_msg}"
+        ) from err
 
     if df is None or df.empty:
-        raise ValueError(
-            f"No market data returned for symbol '{clean_symbol}' (period: {period})."
+        raise SymbolNotFoundError(
+            f"No market data returned for symbol '{clean_symbol}' (period: {clean_period}). "
+            "Verify the ticker symbol and exchange suffix (e.g., '.NS' for NSE, '.BO' for BSE)."
         )
 
     df = df.reset_index()
     df = normalize_dataframe_columns(df)
     missing_columns = REQUIRED_COLUMNS - set(df.columns)
     if missing_columns:
-        raise ValueError(
-            f"Fetched data missing required columns: {sorted(missing_columns)}"
+        raise CorruptedDataError(
+            f"Fetched data for '{clean_symbol}' is missing required columns: {sorted(missing_columns)}"
         )
 
     df["timestamp"] = pd.to_datetime(df["timestamp"])
@@ -133,7 +198,9 @@ def fetch_ohlcv_from_yfinance(symbol: str, period: str = "2y") -> list[Bar]:
         validate_bar(bar)
         bars.append(bar)
 
-    if not bars:
-        raise ValueError(f"No valid bars found for symbol '{clean_symbol}'.")
+    if len(bars) < 5:
+        raise CorruptedDataError(
+            f"Insufficient valid price bars ({len(bars)}) returned for symbol '{clean_symbol}'. At least 5 bars are required."
+        )
 
     return bars

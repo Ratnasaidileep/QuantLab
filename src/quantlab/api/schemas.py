@@ -788,6 +788,19 @@ class EfficientFrontierResponse(BaseModel):
     annualized_volatilities: dict[str, float]
 
 
+class CorrelationMatrixRequest(BaseModel):
+    datasets: list[str] = Field(
+        default_factory=lambda: ["reliance_daily.csv", "tcs_daily.csv", "infy_daily.csv"],
+        min_length=2,
+        description="List of at least 2 datasets to compute cross-asset correlation.",
+    )
+
+
+class CorrelationMatrixResponse(BaseModel):
+    symbols: list[str]
+    matrix: list[list[float]]
+
+
 class UserDTO(BaseModel):
     id: int
     username: str

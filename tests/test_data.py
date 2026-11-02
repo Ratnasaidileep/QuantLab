@@ -134,3 +134,37 @@ def test_load_bars_from_csv_rejects_negative_volume(tmp_path):
 
     with pytest.raises(ValueError, match="Volume cannot be negative"):
         load_bars_from_csv(csv_file)
+
+
+def test_all_bundled_datasets_integrity():
+    """Verify all bundled historical market CSV datasets pass strict OHLCV validation."""
+    from pathlib import Path
+    data_dir = Path("data")
+    csv_files = sorted(data_dir.glob("*.csv"))
+    assert len(csv_files) >= 7, f"Expected at least 7 bundled CSV datasets, found {len(csv_files)}"
+
+    expected_symbols = {"aapl_daily.csv", "googl_daily.csv", "msft_daily.csv", "nvda_daily.csv", "reliance_daily.csv", "tcs_daily.csv", "infy_daily.csv"}
+    actual_names = {f.name for f in csv_files}
+    assert expected_symbols.issubset(actual_names), f"Missing expected datasets: {expected_symbols - actual_names}"
+
+    for file in csv_files:
+        bars = load_bars_from_csv(file)
+        assert len(bars) >= 5, f"{file.name} has fewer than 5 bars ({len(bars)})"
+
+        for i in range(1, len(bars)):
+            assert bars[i].timestamp > bars[i - 1].timestamp, f"{file.name} timestamp not strictly ascending at index {i}"
+
+        for b in bars:
+            assert b.high >= b.low, f"High < Low in {file.name} at {b.timestamp}"
+            assert b.high >= b.open, f"High < Open in {file.name} at {b.timestamp}"
+            assert b.high >= b.close, f"High < Close in {file.name} at {b.timestamp}"
+            assert b.low <= b.open, f"Low > Open in {file.name} at {b.timestamp}"
+            assert b.low <= b.close, f"Low > Close in {file.name} at {b.timestamp}"
+            assert b.volume >= 0, f"Negative volume in {file.name} at {b.timestamp}"
+
+
+def test_load_bars_from_csv_missing_file_raises_error():
+    """Ensure missing dataset raises FileNotFoundError."""
+    from pathlib import Path
+    with pytest.raises(FileNotFoundError):
+        load_bars_from_csv(Path("data/nonexistent_ticker_daily.csv"))

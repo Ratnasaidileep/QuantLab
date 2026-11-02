@@ -273,3 +273,196 @@ def test_scope_to_user_isolation(tmp_path: Path):
     # 5. Guest can delete guest experiment
     assert delete_experiment(guest_exp.id, scope_to_user=True, user_id=None, db_path=db_file) is True
 
+
+def test_confluence_experiment_persistence_and_reproducibility(tmp_path: Path):
+    """Verify Confluence experiment parameters survive persistence and reproduce identical results."""
+    from quantlab.backtest.engine import Backtest
+    from quantlab.data.csv_loader import load_bars_from_csv
+    from quantlab.strategy.confluence import ConfluenceStrategy
+
+    db_file = tmp_path / "test_quantlab.db"
+    data_file = Path("data/reliance_daily.csv")
+    bars = load_bars_from_csv(data_file)
+
+    conf_params = {
+        "confluence_trend_period": 30,
+        "confluence_pullback_period": 10,
+        "confluence_oversold": 45.0,
+        "confluence_overbought": 65.0,
+    }
+
+    # 1. Run actual engine backtest
+    strategy = ConfluenceStrategy(
+        trend_period=conf_params["confluence_trend_period"],
+        pullback_period=conf_params["confluence_pullback_period"],
+        oversold=conf_params["confluence_oversold"],
+        overbought=conf_params["confluence_overbought"],
+    )
+    bt = Backtest(
+        initial_cash=100000.0,
+        strategy=strategy,
+        commission_rate=0.001,
+        slippage_rate=0.001,
+        use_crossover=False,
+    )
+    result = bt.run(bars)
+
+    # 2. Save experiment to SQLite repository
+    record = save_experiment(
+        name="Confluence Persistence Run",
+        notes="Testing full parameter roundtrip",
+        dataset="reliance_daily.csv",
+        strategy="confluence",
+        parameters=conf_params,
+        initial_cash=100000.0,
+        commission_rate=0.001,
+        slippage_rate=0.001,
+        sizing_mode="unit",
+        quantity_per_trade=1.0,
+        final_equity=result.final_equity,
+        total_pnl=result.total_pnl,
+        total_return=result.metrics.total_return,
+        max_drawdown=result.metrics.max_drawdown,
+        total_trades=result.metrics.total_trades,
+        win_rate=result.metrics.win_rate,
+        profit_factor=result.metrics.profit_factor,
+        sharpe_ratio=result.metrics.sharpe_ratio,
+        sortino_ratio=result.metrics.sortino_ratio,
+        cagr=result.metrics.cagr,
+        equity_curve=[{"timestamp": b.timestamp.isoformat(), "equity": eq} for b, eq in zip(bars, result.equity_curve)],
+        trades=[{"timestamp": t.timestamp.isoformat(), "side": t.side.value.lower(), "price": t.price, "quantity": t.quantity, "commission": t.commission} for t in result.trades],
+        db_path=db_file,
+    )
+
+    # 3. Retrieve and verify all 4 parameters survived
+    fetched = get_experiment(record.id, db_path=db_file)
+    assert fetched is not None
+    assert fetched.strategy == "confluence"
+    assert fetched.parameters["confluence_trend_period"] == 30
+    assert fetched.parameters["confluence_pullback_period"] == 10
+    assert fetched.parameters["confluence_oversold"] == 45.0
+    assert fetched.parameters["confluence_overbought"] == 65.0
+
+    # 4. Reconstruct strategy from fetched parameters and rerun
+    restored_strat = ConfluenceStrategy(
+        trend_period=fetched.parameters["confluence_trend_period"],
+        pullback_period=fetched.parameters["confluence_pullback_period"],
+        oversold=fetched.parameters["confluence_oversold"],
+        overbought=fetched.parameters["confluence_overbought"],
+    )
+    rerun_bt = Backtest(
+        initial_cash=fetched.initial_cash,
+        strategy=restored_strat,
+        commission_rate=fetched.commission_rate,
+        slippage_rate=fetched.slippage_rate,
+        use_crossover=False,
+    )
+    rerun_result = rerun_bt.run(bars)
+
+    # 5. Ensure exact identical reproducibility
+    assert rerun_result.final_equity == result.final_equity
+    assert rerun_result.metrics.total_trades == result.metrics.total_trades
+    assert rerun_result.metrics.total_return == result.metrics.total_return
+
+
+def test_confluence_backward_compatibility_with_legacy_parameters(tmp_path: Path):
+    """Verify that older experiments saved with legacy or missing keys still load cleanly."""
+    db_file = tmp_path / "test_quantlab.db"
+
+    # Legacy experiment with old parameter key names
+    legacy_record = save_experiment(
+        name="Legacy Confluence",
+        dataset="tcs_daily.csv",
+        strategy="confluence",
+        parameters={
+            "trend_period": 50,
+            "pullback_period": 14,
+            "oversold": 30.0,
+            "overbought": 70.0,
+        },
+        initial_cash=100000.0,
+        commission_rate=0.001,
+        slippage_rate=0.001,
+        sizing_mode="unit",
+        quantity_per_trade=1.0,
+        final_equity=100000.0,
+        total_pnl=0.0,
+        total_return=0.0,
+        max_drawdown=0.0,
+        total_trades=0,
+        win_rate=None,
+        profit_factor=None,
+        sharpe_ratio=None,
+        sortino_ratio=None,
+        cagr=None,
+        equity_curve=[],
+        trades=[],
+        db_path=db_file,
+    )
+
+    fetched = get_experiment(legacy_record.id, db_path=db_file)
+    assert fetched is not None
+    assert fetched.parameters["trend_period"] == 50
+    assert fetched.parameters["pullback_period"] == 14
+
+    # Simulate UI normalization fallback (matching BacktestContext.tsx logic)
+    p = fetched.parameters
+    normalized_trend = p.get("confluence_trend_period", p.get("trend_period", 50))
+    normalized_pullback = p.get("confluence_pullback_period", p.get("pullback_period", 14))
+    assert normalized_trend == 50
+    assert normalized_pullback == 14
+
+
+
+
+def test_demo_seeder_idempotency_and_user_isolation(tmp_path: Path):
+    """Verify demo seeder is idempotent and preserves user-owned experiments."""
+    from quantlab.storage.demo_seeder import seed_demo_experiments
+
+    db_file = tmp_path / "test_demo_quantlab.db"
+
+    # 1. Create a user and a user-owned experiment
+    user1 = create_user("demo_user_1", "hash", "salt", db_path=db_file)
+    user_exp = save_experiment(
+        name="Real User Secret Experiment",
+        dataset="reliance_daily.csv",
+        strategy="rsi",
+        parameters={"rsi_period": 14},
+        initial_cash=100000.0,
+        commission_rate=0.001,
+        slippage_rate=0.001,
+        sizing_mode="unit",
+        quantity_per_trade=1.0,
+        final_equity=105000.0,
+        total_pnl=5000.0,
+        total_return=0.05,
+        max_drawdown=0.01,
+        total_trades=2,
+        win_rate=1.0,
+        profit_factor=float("inf"),
+        sharpe_ratio=2.0,
+        sortino_ratio=3.0,
+        cagr=0.10,
+        equity_curve=[],
+        trades=[],
+        user_id=user1.id,
+        db_path=db_file,
+    )
+
+    # 2. First seed run
+    seeded_first = seed_demo_experiments(db_path=db_file, data_dir="data", force=False)
+    assert len(seeded_first) == 4
+
+    # Ensure user experiment was NOT deleted or modified
+    fetched_user_exp = get_experiment(user_exp.id, db_path=db_file)
+    assert fetched_user_exp is not None
+    assert fetched_user_exp.name == "Real User Secret Experiment"
+    assert fetched_user_exp.user_id == user1.id
+
+    # 3. Second seed run must be idempotent (0 new experiments created)
+    seeded_second = seed_demo_experiments(db_path=db_file, data_dir="data", force=False)
+    assert len(seeded_second) == 0
+
+    # Ensure total experiments in DB is exactly 5 (1 user + 4 demo)
+    all_exps = list_experiments(db_path=db_file)
+    assert len(all_exps) == 5

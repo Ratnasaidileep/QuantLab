@@ -1,10 +1,11 @@
 import { type MouseEvent, useMemo, useState } from 'react';
-import { executeBasketBacktest, fetchBatchDatasetsFromAPI, fetchEfficientFrontier } from '../api/client';
+import { executeBasketBacktest, fetchBatchDatasetsFromAPI, fetchCorrelationMatrix, fetchEfficientFrontier } from '../api/client';
 import type {
   AllocationWeighting,
   BasketBacktestRequest,
   BasketBacktestResponse,
   DatasetInfo,
+  CorrelationMatrixResponse,
   EfficientFrontierResponse,
   PortfolioPointDTO,
   RebalanceFrequency,
@@ -81,6 +82,31 @@ export function BasketPanel({
   const [frontierPointsCount, setFrontierPointsCount] = useState<number>(25);
   const [frontierSimCount, setFrontierSimCount] = useState<number>(500);
   const [applyNotification, setApplyNotification] = useState<string | null>(null);
+
+// Correlation Matrix State
+  const [correlationData, setCorrelationData] = useState<CorrelationMatrixResponse | null>(null);
+  const [isCorrelationLoading, setIsCorrelationLoading] = useState<boolean>(false);
+  const [correlationError, setCorrelationError] = useState<string | null>(null);
+  const [showCorrelationMatrix, setShowCorrelationMatrix] = useState<boolean>(false);
+
+  const handleComputeCorrelation = async () => {
+    if (selectedDatasets.length < 2) {
+      setCorrelationError('Please select at least 2 assets to compute pairwise correlation.');
+      return;
+    }
+    setIsCorrelationLoading(true);
+    setCorrelationError(null);
+    try {
+      const res = await fetchCorrelationMatrix({ datasets: selectedDatasets });
+      setCorrelationData(res);
+      setShowCorrelationMatrix(true);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to calculate correlation matrix.';
+      setCorrelationError(msg);
+    } finally {
+      setIsCorrelationLoading(false);
+    }
+  };
 
   const handleComputeFrontier = async () => {
     if (selectedDatasets.length < 2) {
@@ -678,6 +704,20 @@ export function BasketPanel({
             </div>
             <button
               type="button"
+              onClick={handleComputeCorrelation}
+              disabled={isCorrelationLoading || selectedDatasets.length < 2}
+              className="btn btn-secondary btn-sm"
+              style={{ padding: '0.35rem 0.8rem', whiteSpace: 'nowrap' }}
+              title="Compute pairwise Pearson asset return correlations"
+            >
+              {isCorrelationLoading ? (
+                <span>Calculating...</span>
+              ) : (
+                <span>📊 Asset Correlation Matrix</span>
+              )}
+            </button>
+            <button
+              type="button"
               onClick={handleComputeFrontier}
               disabled={isFrontierLoading || selectedDatasets.length < 2}
               className="btn btn-secondary btn-sm"
@@ -691,6 +731,126 @@ export function BasketPanel({
             </button>
           </div>
         </div>
+
+{correlationError && (
+          <div className="alert alert-error" style={{ marginBottom: '1rem', fontSize: '0.85rem' }}>
+            {correlationError}
+          </div>
+        )}
+
+        {showCorrelationMatrix && correlationData && (
+          <div
+            style={{
+              marginBottom: '1.5rem',
+              padding: '1rem',
+              background: 'var(--bg-secondary)',
+              borderRadius: '8px',
+              border: '1px solid var(--border-color)',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span style={{ fontSize: '1.1rem' }}>📊</span>
+                <h4 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text-primary)' }}>
+                  Pairwise Asset Return Correlation Matrix
+                </h4>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCorrelationMatrix(false)}
+                className="btn btn-secondary btn-sm"
+                style={{ fontSize: '0.75rem', padding: '0.15rem 0.5rem' }}
+              >
+                ✕ Hide
+              </button>
+            </div>
+
+            <p style={{ margin: '0 0 0.75rem 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+              Pearson correlation coefficients ($r$) calculated from historical daily percentage returns.
+              Values near 0 provide the strongest Markowitz diversification benefits; negative values act as natural hedges.
+            </p>
+
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem', textAlign: 'center' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                    <th style={{ padding: '0.5rem', textAlign: 'left', color: 'var(--text-secondary)' }}>Asset</th>
+                    {correlationData.symbols.map((sym) => (
+                      <th key={sym} style={{ padding: '0.5rem', color: 'var(--text-primary)', fontWeight: 600 }}>
+                        {sym}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {correlationData.symbols.map((rowSym, rIdx) => (
+                    <tr key={rowSym} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                      <td style={{ padding: '0.5rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-primary)' }}>
+                        {rowSym}
+                      </td>
+                      {correlationData.matrix[rIdx].map((val, cIdx) => {
+                        const isDiag = rIdx === cIdx;
+                        let bg: string;
+                        let textColor: string;
+                        if (!isDiag) {
+                          if (val >= 0.7) {
+                            bg = 'rgba(34, 197, 94, 0.25)';
+                            textColor = '#4ade80';
+                          } else if (val >= 0.3) {
+                            bg = 'rgba(34, 197, 94, 0.12)';
+                            textColor = '#86efac';
+                          } else if (val > -0.3) {
+                            bg = 'rgba(148, 163, 184, 0.12)';
+                            textColor = 'var(--text-primary)';
+                          } else if (val > -0.7) {
+                            bg = 'rgba(239, 68, 68, 0.18)';
+                            textColor = '#fca5a5';
+                          } else {
+                            bg = 'rgba(239, 68, 68, 0.30)';
+                            textColor = '#f87171';
+                          }
+                        } else {
+                          textColor = 'var(--text-primary)';
+                          bg = 'rgba(255, 255, 255, 0.05)';
+                        }
+
+                        return (
+                          <td
+                            key={cIdx}
+                            style={{
+                              padding: '0.5rem',
+                              backgroundColor: bg,
+                              color: textColor,
+                              fontWeight: isDiag ? 700 : 500,
+                              borderRadius: '3px',
+                            }}
+                          >
+                            {isDiag ? '1.00' : (val >= 0 ? `+${val.toFixed(2)}` : val.toFixed(2))}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ display: 'flex', gap: '1.25rem', marginTop: '0.75rem', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                <span style={{ width: '10px', height: '10px', backgroundColor: 'rgba(34, 197, 94, 0.3)', borderRadius: '2px', display: 'inline-block' }} />
+                High Co-Movement ($r &gt; 0.7$)
+              </span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                <span style={{ width: '10px', height: '10px', backgroundColor: 'rgba(148, 163, 184, 0.15)', borderRadius: '2px', display: 'inline-block' }} />
+                Diversifier ($-0.3 &le; r &le; 0.3$)
+              </span>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                <span style={{ width: '10px', height: '10px', backgroundColor: 'rgba(239, 68, 68, 0.3)', borderRadius: '2px', display: 'inline-block' }} />
+                Natural Hedge ($r &lt; -0.3$)
+              </span>
+            </div>
+          </div>
+        )}
 
         {frontierError && (
           <div className="alert alert-error" style={{ marginBottom: '1rem', fontSize: '0.85rem' }}>

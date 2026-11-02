@@ -30,7 +30,7 @@ COPY data/ ./data/
 COPY app.py ./
 
 # Install package with actual source code and metadata
-RUN pip install --no-cache-dir --no-deps .
+RUN pip install --no-cache-dir --force-reinstall --no-deps .
 
 # Create unprivileged system user for container security
 RUN groupadd -r quantgroup && useradd -r -g quantgroup -d /app quantuser && \

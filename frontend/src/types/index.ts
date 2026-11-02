@@ -372,6 +372,15 @@ export interface PortfolioPointDTO {
   weights: Record<string, number>;
 }
 
+export interface CorrelationMatrixRequest {
+  datasets: string[];
+}
+
+export interface CorrelationMatrixResponse {
+  symbols: string[];
+  matrix: number[][];
+}
+
 export interface EfficientFrontierRequest {
   datasets: string[];
   risk_free_rate?: number;

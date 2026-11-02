@@ -250,3 +250,37 @@ def generate_efficient_frontier(
         annualized_returns=asset_returns,
         annualized_volatilities=asset_vols,
     )
+
+
+def calculate_correlation_matrix(
+    symbols: list[str],
+    data: dict[str, Sequence[Bar]],
+) -> tuple[list[str], list[list[float]]]:
+    """Calculate Pearson correlation matrix between assets from percentage returns.
+
+    Safely handles constant-return series, missing observations, and single-asset edge cases.
+    """
+    valid_symbols = [s for s in symbols if s in data and len(data[s]) >= 5]
+    if len(valid_symbols) < 2:
+        raise ValueError("At least 2 assets with >= 5 bars are required to compute correlation.")
+
+    # Align closing prices on common dates
+    dates_map: dict[str, dict[Any, float]] = {}
+    for s in valid_symbols:
+        dates_map[s] = {b.timestamp: float(b.close) for b in data[s]}
+
+    common_dates = sorted(set.intersection(*[set(dates_map[s].keys()) for s in valid_symbols]))
+    if len(common_dates) < 5:
+        min_len = min(len(data[s]) for s in valid_symbols)
+        price_matrix = np.array([[float(b.close) for b in data[s][-min_len:]] for s in valid_symbols])
+    else:
+        price_matrix = np.array([[dates_map[s][d] for d in common_dates] for s in valid_symbols])
+
+    returns_matrix = np.diff(price_matrix, axis=1) / price_matrix[:, :-1]
+    corr = np.corrcoef(returns_matrix)
+    corr = np.atleast_2d(corr)
+    corr = np.nan_to_num(corr, nan=0.0, posinf=1.0, neginf=-1.0)
+    for i in range(len(valid_symbols)):
+        corr[i, i] = 1.0
+
+    return valid_symbols, [[round(float(val), 4) for val in row] for row in corr]

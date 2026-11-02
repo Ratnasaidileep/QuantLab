@@ -5,6 +5,7 @@ import numpy as np
 from quantlab.data.models import Bar
 from quantlab.portfolio.basket import AllocationWeighting, BasketBacktestEngine
 from quantlab.portfolio.optimizer import (
+    calculate_correlation_matrix,
     extract_returns_and_covariance,
     generate_efficient_frontier,
     project_simplex,
@@ -123,3 +124,45 @@ def test_basket_engine_mpt_weighting():
     result_mv = engine_mv.run(bars_map)
     assert result_mv.final_equity > 0
     assert np.isclose(sum(result_mv.asset_weights.values()), 1.0)
+
+
+def test_calculate_correlation_matrix():
+    now = datetime(2025, 1, 1, tzinfo=UTC)
+    prices_a = [100.0, 102.0, 100.0, 103.0, 101.0, 104.0, 102.0, 105.0]
+    prices_b = [50.0, 51.0, 50.0, 51.5, 50.5, 52.0, 51.0, 52.5]
+    prices_c = [100.0, 98.0, 100.0, 97.0, 99.0, 96.0, 98.0, 95.0]
+
+    bars_a = [
+        Bar(timestamp=now + timedelta(days=i), open=p, high=p + 1, low=p - 1, close=p, volume=1000.0)
+        for i, p in enumerate(prices_a)
+    ]
+    # Positively correlated with A
+    bars_b = [
+        Bar(timestamp=now + timedelta(days=i), open=p, high=p + 1, low=p - 1, close=p, volume=1000.0)
+        for i, p in enumerate(prices_b)
+    ]
+    # Inversely correlated with A
+    bars_c = [
+        Bar(timestamp=now + timedelta(days=i), open=p, high=p + 1, low=p - 1, close=p, volume=1000.0)
+        for i, p in enumerate(prices_c)
+    ]
+
+    symbols, matrix = calculate_correlation_matrix(["A", "B", "C"], {"A": bars_a, "B": bars_b, "C": bars_c})
+    assert symbols == ["A", "B", "C"]
+    assert len(matrix) == 3
+    assert len(matrix[0]) == 3
+
+    # Diagonal must be 1.0
+    for i in range(3):
+        assert np.isclose(matrix[i][i], 1.0)
+
+    # Symmetry
+    for i in range(3):
+        for j in range(3):
+            assert np.isclose(matrix[i][j], matrix[j][i])
+
+    # A and B are positively correlated
+    assert matrix[0][1] > 0.95
+    # A and C are negatively correlated
+    assert matrix[0][2] < -0.95
+

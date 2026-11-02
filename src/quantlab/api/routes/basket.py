@@ -7,6 +7,8 @@ from quantlab.api.schemas import (
     BasketBacktestResponse,
     BasketEquityPointDTO,
     BasketTradeDTO,
+    CorrelationMatrixRequest,
+    CorrelationMatrixResponse,
     EfficientFrontierRequest,
     EfficientFrontierResponse,
     MetricsDTO,
@@ -20,7 +22,7 @@ from quantlab.portfolio.basket import (
     BasketBacktestEngine,
     RebalanceFrequency,
 )
-from quantlab.portfolio.optimizer import generate_efficient_frontier
+from quantlab.portfolio.optimizer import calculate_correlation_matrix, generate_efficient_frontier
 
 router = APIRouter(prefix="/basket", tags=["Basket Portfolio"])
 
@@ -271,4 +273,55 @@ def compute_efficient_frontier(request: EfficientFrontierRequest) -> EfficientFr
         inverse_volatility=_to_dto(result.inverse_volatility),
         annualized_returns={k: round(v, 4) for k, v in result.annualized_returns.items()},
         annualized_volatilities={k: round(v, 4) for k, v in result.annualized_volatilities.items()},
+    )
+
+
+@router.post("/correlation-matrix", response_model=CorrelationMatrixResponse)
+def compute_correlation_matrix(request: CorrelationMatrixRequest) -> CorrelationMatrixResponse:
+    """Compute Pearson cross-asset correlation matrix from historical daily returns."""
+    if len(request.datasets) < 2:
+        raise HTTPException(
+            status_code=400,
+            detail="At least two datasets are required to compute the correlation matrix.",
+        )
+
+    bars_by_symbol = {}
+    symbols = []
+
+    for dataset_name in request.datasets:
+        clean_name = Path(dataset_name).name
+        file_path = DATA_DIR / clean_name
+
+        if not file_path.exists() or not file_path.is_file():
+            raise HTTPException(
+                status_code=404,
+                detail=f"Dataset '{clean_name}' not found.",
+            )
+
+        try:
+            bars = load_bars_from_csv(file_path)
+        except Exception as error:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Failed to load dataset '{clean_name}': {error}",
+            ) from error
+
+        sym = _symbol_from_filename(clean_name)
+        bars_by_symbol[sym] = bars
+        symbols.append(sym)
+
+    try:
+        valid_symbols, matrix = calculate_correlation_matrix(
+            symbols=symbols,
+            data=bars_by_symbol,
+        )
+    except Exception as error:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Correlation matrix calculation failed: {error}",
+        ) from error
+
+    return CorrelationMatrixResponse(
+        symbols=valid_symbols,
+        matrix=matrix,
     )

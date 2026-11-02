@@ -22,6 +22,14 @@ from quantlab.data.csv_loader import (
     normalize_dataframe_columns,
     save_bars_to_csv,
 )
+from quantlab.data.exceptions import (
+    CorruptedDataError,
+    DataConnectionError,
+    DataError,
+    DataProviderRateLimitError,
+    InvalidSymbolError,
+    SymbolNotFoundError,
+)
 from quantlab.data.models import Bar
 from quantlab.data.validation import validate_bar
 
@@ -156,6 +164,21 @@ def fetch_dataset(request: FetchDatasetRequest) -> DatasetUploadResponse:
 
     try:
         bars = fetch_ohlcv_from_yfinance(clean_symbol, period=request.period)
+    except InvalidSymbolError as e:
+        logger.warning("Invalid symbol requested: %s", clean_symbol)
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except SymbolNotFoundError as e:
+        logger.info("Symbol not found: %s", clean_symbol)
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except DataProviderRateLimitError as e:
+        logger.warning("Rate limit hit fetching %s", clean_symbol)
+        raise HTTPException(status_code=429, detail=str(e)) from e
+    except DataConnectionError as e:
+        logger.warning("Connection failure fetching %s: %s", clean_symbol, e)
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    except CorruptedDataError as e:
+        logger.error("Corrupted data received for %s: %s", clean_symbol, e)
+        raise HTTPException(status_code=502, detail=str(e)) from e
     except Exception as e:
         logger.error("Failed to fetch market data for %s: %s", clean_symbol, e)
         raise HTTPException(
@@ -215,7 +238,7 @@ def fetch_batch_datasets(
                 file_size_bytes=target_path.stat().st_size,
             )
             successful.append(info)
-        except (ValueError, TypeError, OSError, RuntimeError, KeyError) as e:
+        except (DataError, ValueError, TypeError, OSError, RuntimeError, KeyError) as e:
             logger.warning("Batch fetch failed for %s: %s", clean_symbol, e)
             failed.append(FailedSymbolDTO(symbol=clean_symbol, error=str(e)))
 

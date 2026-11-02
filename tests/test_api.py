@@ -774,3 +774,138 @@ def test_efficient_frontier_endpoint_success(client: TestClient):
     assert "max_sharpe" in data
     assert "min_variance" in data
     assert data["max_sharpe"]["sharpe_ratio"] >= data["min_variance"]["sharpe_ratio"]
+
+
+def test_correlation_matrix_endpoint_success(client: TestClient):
+    payload = {
+        "datasets": ["reliance_daily.csv", "tcs_daily.csv"],
+    }
+    response = client.post("/api/v1/basket/correlation-matrix", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert "symbols" in data
+    assert "matrix" in data
+    assert len(data["symbols"]) == 2
+    assert len(data["matrix"]) == 2
+    assert len(data["matrix"][0]) == 2
+    assert abs(data["matrix"][0][0] - 1.0) < 1e-4
+    assert abs(data["matrix"][1][1] - 1.0) < 1e-4
+    assert abs(data["matrix"][0][1] - data["matrix"][1][0]) < 1e-4
+
+
+def test_complete_trader_workflow_e2e(client: TestClient):
+    """Verify complete end-to-end trader research workflow through the API:
+    Register -> Login -> Datasets -> Confluence Backtest -> Save -> Reopen -> Compare -> Optimize.
+    """
+    import time
+    unique_user = f"trader_{int(time.time() * 1000)}"
+    password = "StrongPassword123!"
+
+    # 1. Register
+    reg_resp = client.post("/api/v1/auth/register", json={"username": unique_user, "password": password})
+    assert reg_resp.status_code == 201
+
+    # 2. Login
+    login_resp = client.post("/api/v1/auth/login", json={"username": unique_user, "password": password})
+    assert login_resp.status_code == 200
+    token = login_resp.json()["access_token"]
+    auth_headers = {"Authorization": f"Bearer {token}"}
+
+    # 3. Query Datasets
+    ds_resp = client.get("/api/v1/datasets")
+    assert ds_resp.status_code == 200
+    files = [d["filename"] for d in ds_resp.json()["datasets"]]
+    assert "tcs_daily.csv" in files
+    assert "reliance_daily.csv" in files
+
+    # 4. Execute Confluence Strategy Backtest with custom non-default parameters
+    conf_payload = {
+        "dataset": "tcs_daily.csv",
+        "strategy": "confluence",
+        "confluence_trend_period": 30,
+        "confluence_pullback_period": 10,
+        "confluence_oversold": 50.0,
+        "confluence_overbought": 65.0,
+        "initial_cash": 100000.0,
+        "commission_rate": 0.001,
+        "slippage_rate": 0.001,
+        "sizing_mode": "unit",
+    }
+    bt_resp = client.post("/api/v1/backtest", json=conf_payload)
+    assert bt_resp.status_code == 200
+    bt_data = bt_resp.json()
+    assert bt_data["strategy_name"] == "Confluence"
+    assert bt_data["bars_processed"] > 0
+    assert len(bt_data["trades"]) > 0
+
+    # 5. Persist Experiment as Authenticated User
+    save_payload = {
+        "name": "E2E Authenticated Confluence Run",
+        "notes": "Testing trader workflow with full parameter persistence",
+        "dataset": bt_data["dataset"],
+        "strategy": bt_data["strategy_name"].lower(),
+        "parameters": {
+            "confluence_trend_period": 30,
+            "confluence_pullback_period": 10,
+            "confluence_oversold": 50.0,
+            "confluence_overbought": 65.0,
+        },
+        "initial_cash": bt_data["initial_cash"],
+        "commission_rate": 0.001,
+        "slippage_rate": 0.001,
+        "sizing_mode": "unit",
+        "quantity_per_trade": 1.0,
+        "final_equity": bt_data["final_equity"],
+        "total_pnl": bt_data["total_pnl"],
+        "total_return": bt_data["metrics"]["total_return"],
+        "max_drawdown": bt_data["metrics"]["max_drawdown"],
+        "total_trades": bt_data["metrics"]["total_trades"],
+        "win_rate": bt_data["metrics"]["win_rate"],
+        "profit_factor": bt_data["metrics"]["profit_factor"],
+        "sharpe_ratio": bt_data["metrics"]["sharpe_ratio"],
+        "sortino_ratio": bt_data["metrics"]["sortino_ratio"],
+        "cagr": bt_data["metrics"]["cagr"],
+        "equity_curve": bt_data["equity_curve"],
+        "trades": bt_data["trades"],
+    }
+    save_resp = client.post("/api/v1/experiments", json=save_payload, headers=auth_headers)
+    assert save_resp.status_code == 201
+    exp_id = save_resp.json()["id"]
+
+    # 6. Reopen Experiment and verify Confluence parameters preserved
+    get_resp = client.get(f"/api/v1/experiments/{exp_id}", headers=auth_headers)
+    assert get_resp.status_code == 200
+    exp_data = get_resp.json()
+    assert exp_data["name"] == "E2E Authenticated Confluence Run"
+    assert exp_data["parameters"]["confluence_trend_period"] == 30
+    assert exp_data["parameters"]["confluence_pullback_period"] == 10
+    assert exp_data["parameters"]["confluence_oversold"] == 50.0
+    assert exp_data["parameters"]["confluence_overbought"] == 65.0
+    assert len(exp_data["trades"]) == len(bt_data["trades"])
+
+    # 7. Verify Unauthenticated / Guest session cannot access this private experiment
+    guest_get = client.get(f"/api/v1/experiments/{exp_id}")
+    assert guest_get.status_code == 404
+
+    # 8. Run Strategy Comparison
+    comp_resp = client.post("/api/v1/compare", json={"dataset": "reliance_daily.csv", "initial_cash": 100000.0})
+    assert comp_resp.status_code == 200
+    comp_data = comp_resp.json()
+    assert len(comp_data["results"]) >= 4
+
+    # 9. Run Walk-Forward Analysis
+    wf_payload = {
+        "dataset": "reliance_daily.csv",
+        "strategy": "moving_average",
+        "num_windows": 3,
+        "window_mode": "rolling",
+        "initial_cash": 100000.0,
+        "commission_rate": 0.001,
+        "slippage_rate": 0.001,
+        "sizing_mode": "unit",
+        "quantity_per_trade": 1.0,
+        "optimization_metric": "total_return",
+    }
+    wf_resp = client.post("/api/v1/analytics/walk-forward", json=wf_payload)
+    assert wf_resp.status_code == 200
+    assert len(wf_resp.json()["windows"]) == 3
